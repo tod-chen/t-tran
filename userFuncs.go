@@ -14,20 +14,23 @@ const(
 type queryTranResult struct{
 	depStations map[string]string
 	arrStations map[string]string
-	result []string
+	tranInfos []string
 }
 
 // 查询车次及余票数
 func queryTrans(depStation, arrStation string, depDate time.Time, isAdult bool)queryTranResult{
-	depCityCode := modules.GetCityCodeByStationName(depStation)
-	arrCityCode := modules.GetCityCodeByStationName(arrStation)
+	_, depCityCode := modules.GetCityCodeByStationName(depStation)
+	_, arrCityCode := modules.GetCityCodeByStationName(arrStation)
 	result := queryTranResult{
-		depStations : modules.GetRelationStations(depCityCode),
-		arrStations : modules.GetRelationStations(arrCityCode),
-		result : make([]string, 20),
+		// depStations : modules.GetRelationStations(depCityCode),
+		// arrStations : modules.GetRelationStations(arrCityCode),
 	}
-	
+	result.tranInfos = modules.QueryMatchTransInfo(depCityCode, arrCityCode, depDate, isAdult)
 	return result
+}
+
+func queryRoute(tranNum string)[]modules.QueryRouteResult {
+	return modules.QueryRoutetable(tranNum)
 }
 
 // 提交订单

@@ -1,15 +1,22 @@
 package modules
 
-const (
-	maxGoroutineCount = 5000
+import(
+	"fmt"
 )
 
+const (
+	constMaxGoroutineCount = 5000
+)
+
+// goroutine 池
 var goPool *goRoutinePool
 
-func init(){
+func initGoPool(){
+	fmt.Println("begin init goPool")
+	defer fmt.Println("end init goPool")
 	goPool = &goRoutinePool{}
-	goPool.ch = make(chan byte, maxGoroutineCount)
-	for i:=0;i<maxGoroutineCount;i++{
+	goPool.ch = make(chan byte, constMaxGoroutineCount)
+	for i:=0;i<constMaxGoroutineCount;i++{
 		goPool.ch <- 1
 	}
 	goPool.active = true

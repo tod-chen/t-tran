@@ -1,36 +1,40 @@
 package modules
 
-// 站点名称与城市代码关系
-var stationMap map[string]string
+import (	
+	"fmt"
+	"database/sql"
+)
+// 车站集合
 var stations []station
 
-func init(){
-	// TODO: 初始化stations & stationMap
+func initStation(db *sql.DB){
+	fmt.Println("begin init stations")
+	defer fmt.Println("end init stations")
+	stations = make([]station, 0, 2400)
+	query := "select stationName, stationCode, cityCode from stations where isPassenger is not null"
+	rows, err := db.Query(query)
+	if err != nil {
+		panic("query error")
+	}
+	defer rows.Close()
+	for rows.Next() {
+		s := new(station)
+		rows.Scan(&s.stationName, &s.stationCode, &s.cityCode)
+		stations = append(stations, *s)
+	}
 }
-
 type station struct{
 	stationName string
 	stationCode string
 	cityCode string
 }
 
-// GetCityCodeByStationName 根据站点名，找出城市编码
-func GetCityCodeByStationName(stationName string)string{
-	for name, cityCode := range stationMap {
-		if name == stationName {
-			return cityCode
+// GetCityCodeByStationName 根据站点名，找出站点编码与城市编码
+func GetCityCodeByStationName(stationName string)(string, string){
+	for _, s := range stations {
+		if s.stationName == stationName {
+			return s.stationCode, s.cityCode
 		}
 	}
-	return ""
-}
-
-// GetRelationStations 根据城市编码，找出同市内的其他站点名及站点编码
-func GetRelationStations(cityCode string)map[string]string{
-	result := make(map[string]string)
-	for _, item := range stations {
-		if cityCode == item.cityCode {
-			result[item.stationName] = item.stationCode
-		}
-	}
-	return result
+	return "", ""
 }

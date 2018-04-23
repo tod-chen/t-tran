@@ -6,10 +6,6 @@ import (
 	// "time"
 )
 
-const(
-	// queryMaxSeatCount 查询某座次余票数的最大值（超过此值时，不再继续查询余票数）
-	queryMaxSeatCount int32 = 100
-)
 
 
 
