@@ -23,6 +23,7 @@ func initStation(db *sql.DB){
 		stations = append(stations, *s)
 	}
 }
+
 type station struct{
 	stationName string
 	stationCode string

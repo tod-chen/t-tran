@@ -277,72 +277,6 @@ func (o *order)Change(t *tran, depIndex, arrIndex uint, userID, contactID int, i
 
 
 	// 锁定座位，创建订单
-	// start, end := t.seatTypesIndex[seatTypeIndex], t.seatTypesIndex[seatTypeIndex + 1]
-	// seatMatch := getSeatMatch(depIndex, arrIndex)
-	// var s *seat
-
-	// for i:=start; i< end; i++ {
-	// 	if t.seats[i].IsAvailable(seatMatch, isAdult) {
-	// 		s = t.seats[i]
-	// 		break
-	// 	}
-	// }
-	// if acceptNoSeat && s == nil {
-	// 	typeIndex := uint(len(t.seatTypesIndex) - 2)
-	// 	var seatableTypeIndex uint
-	// 	for i:=typeIndex; i>0; i-- {
-	// 		if t.seatTypesIndex[i] != t.seatTypesIndex[i-1] {
-	// 			seatableTypeIndex = i - 1
-	// 			break
-	// 		}
-	// 	}
-	// 	if seatableTypeIndex == seatTypeIndex { // 可替换的座位类型
-	// 		s = t.getOneAvailableNoSeat(seatMatch, depIndex, arrIndex)
-	// 	}
-	// }
-	// if s != nil {
-	// 	s.l.Lock()
-	// 	if !s.isPutTogetherNoSeat {
-	// 		s.seatRoute ^= seatMatch
-	// 	} else{
-	// 		for i:=depIndex; i<arrIndex; i++ {
-	// 			t.noSeatEachRouteTravelerCount[i]++
-	// 		}
-	// 	}
-	// 	newOrder := &order{
-	// 		bookTime : time.Now(),
-	// 		departureStation : t.routeTimetable[depIndex].stationName,
-	// 		departureTime : t.routeTimetable[depIndex].depTime,
-	// 		arrivalStation : t.routeTimetable[arrIndex].stationName,
-	// 		arrivalTime : t.routeTimetable[arrIndex].arrTime,
-	// 		carNum : s.carNum,
-	// 		contactID : contactID,
-	// 		seatNum : s.seatNum,
-	// 		userID : userID,
-	// 		tranNum : t.tranNum,
-	// 		tranID : t.id,
-	// 		seatType : s.seatType,
-	// 		// 根据价格表，各路段累加
-	// 		price : getTicketPrice(t.tranNum, seatTypeIndex, depIndex, arrIndex),
-	// 	}
-		
-	// 	unpayOrders = append(unpayOrders, newOrder)
-	// 	s.l.Unlock()
-	// 	time.AfterFunc(unpayOrderAvaliableTime * time.Minute, func(){
-	// 		if newOrder.status == constOrderStatusUnpay {
-	// 			newOrder.status = constOrderStatusTimeout
-	// 			s.l.Lock()
-	// 			if s.seatType != SeatTypeNoSeat {
-	// 				s.seatRoute &= (^seatMatch)
-	// 			} else {
-	// 				for i:=depIndex; i<arrIndex; i++ {
-	// 					t.noSeatEachRouteTravelerCount[i]--
-	// 				}
-	// 			}
-	// 			s.l.Unlock()
-	// 		}
-	// 	})
-	// }
 	return
 }
 
@@ -353,46 +287,8 @@ func (o *order)CheckIn(){
 	}
 }
 
-func (o *order)releaseSeat(){
-	key := o.departureTime.Format(constYmdFormat)
-	if trans, ok := tranScheduleMap[key]; ok {
-		for _, t := range trans {
-			if t.tranNum != o.tranNum {
-				tempIdx := -1
-				var depIdx, arrIdx uint8
-				for idx, r := range t.routeTimetable {
-					if tempIdx == -1 && r.stationName == o.departureStation{
-						tempIdx = idx
-						depIdx = uint8(idx)
-					}
-					if tempIdx != -1 && r.stationName == o.arrivalStation {
-						arrIdx = uint8(idx)
-						break
-					}
-				}
-				carLen := len(t.cars)
-				for i:=0; i<carLen; i++ {
-					if t.cars[i].carNum == o.carNum {
-						seatBit := countSeatBit(depIdx, arrIdx)
-						if o.seatNum != "" {
-							for _, s := range t.cars[i].seats {
-								if s.seatNum == o.seatNum {
-									s.Release(seatBit)
-								}
-							}
-						} else {
-							for _, s := range t.cars[i].noSeats {
-								if s.seatBit & seatBit == 0 {
-									s.Release(seatBit)
-								}
-							}
-						}
-						t.cars[i].releaseSeat(uint8(depIdx), uint8(arrIdx))
-					}
-				}
-			}
-		}
-	}
+func (o *order)releaseSeat() error{
+	return nil
 }
 
 func (o *order)refundMoney(amount float32) error {

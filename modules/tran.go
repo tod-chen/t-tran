@@ -10,9 +10,16 @@ import (
 )
 
 const (
-	// 小时:分钟 格式
+	// 时间格式 小时:分钟 
 	constHmFormat = "15:04"
+	// 时间格式 年-月-日
 	constYmdFormat = "2006-01-02"
+	// 车次数量
+	constTranCount = 13000
+	// 可提前订票天数
+	constDays = 30
+	// 有火车经过的城市数量
+	constCityCount = 620
 	// 查询时距离当前时间多长时间内发车的车次不予显示 单位：分钟
 	constQueryTranDelay = 20
 	// 未完成订单有效时间 单位：分钟
@@ -38,28 +45,26 @@ const (
 var (	
 	// 所有车次信息，不参与订票，用于查询列车的时刻表和各路段各座次的价格
 	tranList []tran
-	// 每天列车日程安排关系
-	tranScheduleMap map[string]([]tran)
+	// 各城市与经过该城市的列车映射
+	cityTranMap map[string]([]*tran)
 	// 所有接受订票的列车集合
-	tranSchedulePool []tran
+	tranScheduleMap map[string]([]tran)
 )
 
 func initTran(db *sql.DB){
-	fmt.Println("begin init tran info and routes")
-	defer fmt.Println("end init tran info and routes")
-	const (
-		// 从数据库中查询到的所有车次，假设每天有13000趟列车运营，则30天内有13000*30=39万趟列车可以接受订票
-		tranCount = 13000
-		days = 30
-	)
-	tranList = make([]tran, 0, tranCount)
-	tranScheduleMap = make(map[string][]tran, days)
-	// 实际需从数据库中查询
-	tranSchedulePool = make([]tran, 0, tranCount * days)	
+	initTranList(db)
+	initCityTranMap()
+	initTranScheduleMap()
+}
+
+func initTranList(db *sql.DB){
+	fmt.Println("begin init tranList")
+	defer fmt.Println("end init tranList")
+	tranList = make([]tran, 0, constTranCount)
 	query := "select tranNum, depTime, runDays from traninfo"
 	rows, err := db.Query(query)
 	if err != nil {
-		panic("query error")		
+		panic("query error")
 	}
 	defer rows.Close()
 	var (
@@ -79,7 +84,6 @@ func initTran(db *sql.DB){
 		t.runDays = uint8(runDays)
 		tranList = append(tranList, t)
 	}
-
 	for i:=0; i<len(tranList); i++ {
 		// 初始化所有列车的组合字段
 		routes := make([]route, 0, 10)	// 根据车次号从路线表中读取
@@ -111,40 +115,51 @@ func initTran(db *sql.DB){
 		default:
 			tranList[i].carTypesIdx = []uint8{0, 0, 0, 0, 0, 3, 3, 9, 9, 15}
 		}
+	}
+}
 
-		now := time.Now()
-		// 初始化列车日程安排关系，当某车次跨多日时，所对应的那些日期键的值中，都需要包含该车次
-		for d:=0; d<days; d++ {
-			key := now.AddDate(0, 0, d).Format(constYmdFormat)
-			trans, ok := tranScheduleMap[key]
-			if !ok {
-				trans = make([]tran, 0, tranCount)
+func initCityTranMap(){
+	fmt.Println("begin init cityTranMap")
+	defer fmt.Println("end init cityTranMap")
+	cityTranMap = make(map[string]([]*tran), constCityCount)
+	for i:=0; i<len(tranList); i++ {
+		for j:=0; j<len(tranList[i].routeTimetable); j++ {
+			cityCode := tranList[i].routeTimetable[j].cityCode
+			tranPtrs, exist := cityTranMap[cityCode]
+			if exist {
+				tranPtrs = append(tranPtrs, &tranList[i])
+			} else{
+				tranPtrs = []*tran { &tranList[i] }
 			}
-			trans = append(trans, tranList[i])
-			tranScheduleMap[key] = trans
+			cityTranMap[cityCode] = tranPtrs
+		}
+	}
+}
+
+func initTranScheduleMap(){	
+	fmt.Println("begin init tranScheduleMap")
+	defer fmt.Println("end init tranScheduleMap")
+	tranScheduleMap = make(map[string]([]tran), constDays)
+	now := time.Now()
+	for i:=0; i<len(tranList); i++ {
+		for d:=0; d<constDays; d++ {
+			date := now.AddDate(0, 0, d).Format(constYmdFormat)
+			trans, exist := tranScheduleMap[date]
+			if !exist {
+				trans = make([]tran, 0, constTranCount)
+			}
+			tranScheduleMap[date] = append(trans, tranList[i])			
 		}
 	}
 }
 //////////////////////////////////////////////
-///          列车结构体及其对应方法          ///
+///          列车结构体及其方法              ///
 //////////////////////////////////////////////
 
 
 // QueryMatchTransInfo 获取所选出发日期中， 经过出发站、目的站的车次及其各类余票数量
 func QueryMatchTransInfo(depCityCode, arrCityCode string, depDate time.Time, isAdult bool)(result []string) {
-	result = make([]string, 20)
-
-	dateStr := depDate.Format(constYmdFormat)
-	for date, trans := range tranScheduleMap {
-		if dateStr == date {
-			for _, t := range trans {
-				if depIdx, arrIdx, ok := t.IsMatchStation(depCityCode, arrCityCode); ok {
-					result = append(result, t.GetTranInfoAndSeatCount(depIdx, arrIdx, isAdult))
-				}
-			}
-			break
-		}
-	}
+	
 	return
 }
 

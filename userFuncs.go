@@ -2,7 +2,7 @@ package main
 
 import (
 	"time"
-	"12306/modules"
+	"t-tran/modules"
 )
 
 const(

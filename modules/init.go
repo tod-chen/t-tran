@@ -6,7 +6,7 @@ import (
 )
 
 
-func init(){	
+func init(){
 	db, err := sql.Open("mysql", "root:@tcp(localhost:3306)/t-tran?charset=utf8")
 	if err != nil {
 		panic(err)
