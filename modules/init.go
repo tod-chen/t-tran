@@ -1,10 +1,10 @@
 package modules
 
 import (
-	"database/sql"	
+	"database/sql"
+	// mysql 
 	_ "github.com/go-sql-driver/mysql"
 )
-
 
 func init(){
 	db, err := sql.Open("mysql", "root:@tcp(localhost:3306)/t-tran?charset=utf8")

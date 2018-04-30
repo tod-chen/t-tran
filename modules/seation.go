@@ -30,12 +30,12 @@ type station struct{
 	cityCode string
 }
 
-// GetCityCodeByStationName 根据站点名，找出站点编码与城市编码
-func GetCityCodeByStationName(stationName string)(string, string){
+// 根据站点名，找出站点编码与城市编码
+func getCityCodeByStationCode(stationCode string) string {
 	for _, s := range stations {
-		if s.stationName == stationName {
-			return s.stationCode, s.cityCode
+		if s.stationCode == stationCode {
+			return s.cityCode
 		}
 	}
-	return "", ""
+	return ""
 }
