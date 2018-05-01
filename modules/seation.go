@@ -31,11 +31,11 @@ type station struct{
 }
 
 // 根据站点名，找出站点编码与城市编码
-func getCityCodeByStationCode(stationCode string) string {
-	for _, s := range stations {
-		if s.stationCode == stationCode {
-			return s.cityCode
+func getStationInfoByName(stationName string) *station {
+	for i:=0; i<len(stations); i++ {
+		if stations[i].stationName == stationName {
+			return &stations[i]
 		}
 	}
-	return ""
+	return nil
 }

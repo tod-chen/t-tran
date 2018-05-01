@@ -18,19 +18,18 @@ type queryTranResult struct{
 }
 
 // 查询车次及余票数
-func queryTrans(depStation, arrStation string, depDate time.Time, isAdult bool)queryTranResult{
-	_, depCityCode := modules.GetCityCodeByStationName(depStation)
-	_, arrCityCode := modules.GetCityCodeByStationName(arrStation)
-	result := queryTranResult{
-		// depStations : modules.GetRelationStations(depCityCode),
-		// arrStations : modules.GetRelationStations(arrCityCode),
-	}
-	result.tranInfos = modules.QueryMatchTransInfo(depCityCode, arrCityCode, depDate, isAdult)
-	return result
+func queryTrans(depStationName, arrStationName string, depDate time.Time, isStudent bool)[]string{
+	return modules.QueryMatchTransInfo(depStationName, arrStationName, depDate, isStudent)
 }
 
+// 查询时刻表
 func queryRoute(tranNum string)[]modules.QueryRouteResult {
 	return modules.QueryRoutetable(tranNum)
+}
+
+// 查询票价
+func queryPrice(tranNum string, depIdx, arrIdx uint8) map[string]float32 {
+	return modules.QuerySeatPrice(tranNum, depIdx, arrIdx)
 }
 
 // 提交订单

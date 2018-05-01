@@ -265,18 +265,19 @@ func (r *remainingTickets) toString() string{
 }
 
 // QueryMatchTransInfo 获取所选出发日期中， 经过出发站、目的站的车次及其各类余票数量
-func QueryMatchTransInfo(depStationCode, arrStationCode string, queryDate time.Time, isAdult bool)(result []string) {
-	depCityCode := getCityCodeByStationCode(depStationCode)
-	depTrans, exist := cityTranMap[depCityCode]
+func QueryMatchTransInfo(depStationName, arrStationName string, queryDate time.Time, isStudent bool)(result []string) {
+	depS := getStationInfoByName(depStationName)
+	depTrans, exist := cityTranMap[depS.cityCode]
 	if !exist {
 		return
 	}
-	arrCityCode := getCityCodeByStationCode(arrStationCode)
+	arrS := getStationInfoByName(arrStationName)
 	availableTime := time.Now().Add(constQueryTranDelay * time.Minute)
 	resultCh := make(chan *remainingTickets, 20)
+	defer close(resultCh)
 	matchTranCount := 0
 	for i:=0; i<len(depTrans); i++ {
-		depIdx, arrIdx, ok := depTrans[i].IsMatchStation(depCityCode, depStationCode, arrCityCode, arrStationCode)
+		depIdx, arrIdx, ok := depTrans[i].IsMatchStation(depS, arrS)
 		if !ok {
 			continue
 		}
@@ -303,7 +304,7 @@ func QueryMatchTransInfo(depStationCode, arrStationCode string, queryDate time.T
 				goPool.Take()
 				go func(tranInfo *tran, depIdx, arrIdx uint8){
 					defer goPool.Return()
-					resultCh <- trans[i].GetTranInfoAndSeatCount(depIdx, arrIdx, tranInfo.carTypesIdx, isAdult)
+					resultCh <- trans[i].GetTranInfoAndSeatCount(depIdx, arrIdx, tranInfo.carTypesIdx, isStudent)
 				}(depTrans[i], depIdx, arrIdx)					
 				break
 			}
@@ -408,17 +409,17 @@ func (t *tran)getSeatPrice(depIdx, arrIdx uint8)(result map[string]float32){
 }
 
 // IsMatchStation 判断当前车次在站点是否匹配
-func (t *tran)IsMatchStation(depCityCode, depStationCode, arrCityCode, arrStationCode string) (depIdx, arrIdx uint8, ok bool){
+func (t *tran)IsMatchStation(depS, arrS *station) (depIdx, arrIdx uint8, ok bool){
 	depI := -1
 	// 出发地与目的地是不同的城市
-	if depCityCode != arrCityCode {
+	if depS.cityCode != arrS.cityCode {
 		// TODO: 当某车次的路线经过某城市的两个站，该怎么匹配？ 当前算法是匹配第一个，与12306逻辑一致 12306这里算是一个bug	
 		for i:=0; i<len(t.routeTimetable); i++ {
-			if depI == -1 && t.routeTimetable[i].cityCode == depCityCode {
+			if depI == -1 && t.routeTimetable[i].cityCode == depS.cityCode {
 				depI = i
 				depIdx = uint8(i)
 			}
-			if depI != -1 && t.routeTimetable[i].cityCode == arrCityCode {
+			if depI != -1 && t.routeTimetable[i].cityCode == arrS.cityCode {
 				// 同一城市内
 				arrIdx = uint8(i)
 				ok = true
@@ -427,11 +428,11 @@ func (t *tran)IsMatchStation(depCityCode, depStationCode, arrCityCode, arrStatio
 		}
 	} else { // 出发地与目的地是同一个城市
 		for i:=0; i<len(t.routeTimetable); i++ {
-			if depI == -1 && t.routeTimetable[i].stationCode == depStationCode {
+			if depI == -1 && t.routeTimetable[i].stationCode == depS.stationCode {
 				depI = i
 				depIdx = uint8(i)
 			}
-			if depI != -1 && t.routeTimetable[i].stationCode == arrStationCode {
+			if depI != -1 && t.routeTimetable[i].stationCode == arrS.stationCode {
 				arrIdx = uint8(i)
 				ok = true
 				return
@@ -442,7 +443,7 @@ func (t *tran)IsMatchStation(depCityCode, depStationCode, arrCityCode, arrStatio
 }
 
 // GetTranInfoAndSeatCount 返回车次信息、起止站在时刻表中的索引、各类座位余票数、可售标记、不售票说明
-func (t *tran)GetTranInfoAndSeatCount(depIdx, arrIdx uint8, carTypeIdx []uint8, isAdult bool)(remain *remainingTickets) {
+func (t *tran)GetTranInfoAndSeatCount(depIdx, arrIdx uint8, carTypeIdx []uint8, isStudent bool)(remain *remainingTickets) {
 	remain = newRemainingTickets(t, depIdx, arrIdx)
 	// 有不售票说明，表示当前不售票，不用查余票数
 	if t.notSaleRemark != "" {
@@ -463,7 +464,7 @@ func (t *tran)GetTranInfoAndSeatCount(depIdx, arrIdx uint8, carTypeIdx []uint8, 
 		availableSeatCount := 0
 		for j:=start; j<end && availableSeatCount < constMaxAvaliableSeatCount; j++ {
 			for k:=0; k<len(t.cars[j].seats) && availableSeatCount < constMaxAvaliableSeatCount; k++ {
-				if t.cars[j].seats[0].IsAvailable(seatBit, isAdult) {
+				if t.cars[j].seats[0].IsAvailable(seatBit, isStudent) {
 					availableSeatCount++
 				}
 			}
@@ -496,9 +497,9 @@ type car struct{
 }
 
 // getAvailableSeat 获取可预订的座位,是否获取成功标记,是否为拼凑的站票标记
-func (c *car)getAvailableSeat(seatBit uint64, isAdult, acceptNoSeat bool, depIdx, arrIdx uint8)(s *seat, ok, isMedley bool) {
+func (c *car)getAvailableSeat(seatBit uint64, isStudent, acceptNoSeat bool, depIdx, arrIdx uint8)(s *seat, ok, isMedley bool) {
 	for i:=0; i<len(c.seats); i++ {
-		if c.seats[i].IsAvailable(seatBit, isAdult){
+		if c.seats[i].IsAvailable(seatBit, isStudent){
 			return c.seats[i], true, false
 		}
 	}
@@ -523,7 +524,7 @@ func (c *car)getAvailableSeat(seatBit uint64, isAdult, acceptNoSeat bool, depIdx
 		}
 	}
 	if totalSeatCount - int(maxTravelerCountInRoute) > 0 {
-		s = &seat{seatNum:"", isAdult: true, seatBit: seatBit}
+		s = &seat{seatNum:"", seatBit: seatBit}
 		return s, true, true
 	}
 	return nil, false, false
@@ -589,8 +590,8 @@ func (c *car)releaseSeat(depIdx, arrIdx uint8){
 type seat struct{
 	// 座位号
 	seatNum string
-	// 是否成人票
-	isAdult bool
+	// 是否学生票
+	isStudent bool
 	// 座位的位标记，64位代表64个路段，值为7时，表示从起始站到第四站，这个座位都被人订了
 	// 为什么用64位？ 因为途经站点最多的车次有57站。。。
 	seatBit uint64
@@ -599,15 +600,15 @@ type seat struct{
 }
 
 // IsAvailable 根据路段和乘客类型判断能否订票
-func (s *seat)IsAvailable(seatBit uint64, isAdult bool) bool{
-	return (s.isAdult == isAdult) && (s.seatBit ^ seatBit == s.seatBit + seatBit)
+func (s *seat)IsAvailable(seatBit uint64, isStudent bool) bool{
+	return (s.isStudent == isStudent) && (s.seatBit ^ seatBit == s.seatBit + seatBit)
 }
 
 // Book 订票
-func (s *seat)Book(seatBit, tranFullSeatBit uint64, isAdult bool)bool{
+func (s *seat)Book(seatBit, tranFullSeatBit uint64, isStudent bool)bool{
 	s.Lock()
 	defer s.Unlock()
-	if !s.IsAvailable(seatBit, isAdult) {
+	if !s.IsAvailable(seatBit, isStudent) {
 		return false
 	}
 	s.seatBit ^= seatBit

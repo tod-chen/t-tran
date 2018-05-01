@@ -104,7 +104,7 @@ func getOrderPrice(tranNum, seatType, seatNum string, depIdx, arrIdx uint8) (pri
 }
 
 // SubmitOrder 订票
-func SubmitOrder(t *tran, depIdx, arrIdx uint8, userID, contactID int, isAdult bool, seatType string, acceptNoSeat bool)error{	
+func SubmitOrder(t *tran, depIdx, arrIdx uint8, userID, contactID int, isStudent bool, seatType string, acceptNoSeat bool)error{	
 	// 判断是否有未支付的订单，有未支付的订单，则不进行下一步 可考虑从数据库中查询
 	if hasUnpayOrder(userID) {
 		return errors.New("您有未完成的订单，请先完成订单")
@@ -125,14 +125,14 @@ func SubmitOrder(t *tran, depIdx, arrIdx uint8, userID, contactID int, isAdult b
 	for i:=0; i<carLen; i++ {
 		if t.cars[i].seatType == seatType {
 			// 优先查询非站票
-			s, success, isMedley = t.cars[i].getAvailableSeat(seatBit, isAdult, false, depIdx, arrIdx)
+			s, success, isMedley = t.cars[i].getAvailableSeat(seatBit, isStudent, false, depIdx, arrIdx)
 			if success {
 				if isMedley {
 					if t.cars[i].occupySeat(depIdx, arrIdx) {
 						carIdx = i
 						break
 					}
-				} else if s.Book(seatBit, t.fullSeatBit, isAdult) {
+				} else if s.Book(seatBit, t.fullSeatBit, isStudent) {
 					t.cars[i].occupySeat(depIdx, arrIdx)
 					carIdx = i
 					break
@@ -259,7 +259,7 @@ func (o *order)Refund()error{
 }
 
 // Change 改签
-func (o *order)Change(t *tran, depIndex, arrIndex uint, userID, contactID int, isAdult bool, seatTypeIndex uint, acceptNoSeat bool)(msg string, ok bool){
+func (o *order)Change(t *tran, depIndex, arrIndex uint, userID, contactID int, isStudent bool, seatTypeIndex uint, acceptNoSeat bool)(msg string, ok bool){
 	ok = false
 	// 判断是否有未支付的订单，有未支付的订单，则不进行下一步 可考虑从数据库中查询
 	if hasUnpayOrder(userID) {
