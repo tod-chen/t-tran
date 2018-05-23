@@ -1,0 +1,14 @@
+.routeTable{
+    height: 230px;
+    width: 360px;    
+}
+
+.routeTable tbody{
+    overflow-y: auto;
+}
+
+.popover {
+    max-width: initial !important;
+    height: 300px;
+    overflow-y: auto;
+}

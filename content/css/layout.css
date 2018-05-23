@@ -1,0 +1,13 @@
+div.header {
+    height: 50px;
+}
+
+div.menu {
+    min-height: 600px;
+    height: auto;
+    border-right: 1px solid #ccc;
+}
+
+div.footer {
+    height: 10px;
+}

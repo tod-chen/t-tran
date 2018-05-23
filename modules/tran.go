@@ -46,11 +46,11 @@ const (
 
 var (
 	// 所有车次信息，不参与订票，用于查询列车的时刻表和各路段各座次的价格
-	tranList []tran
+	tranList []Tran
 	// 各城市与经过该城市的列车映射
-	cityTranMap map[string]([]*tran)
+	cityTranMap map[string]([]*Tran)
 	// 列车按日期安排表
-	tranScheduleMap map[string]([]tran)
+	tranScheduleMap map[string]([]Tran)
 )
 
 func initTran() {
@@ -99,18 +99,18 @@ func initTranListFromMySQL() {
 	}
 	defer rows.Close()
 	for rows.Next() {
-		t := tran{ScheduleIntervalDays: 1}
+		t := Tran{ScheduleIntervalDays: 1}
 		err = rows.Scan(&t.TranNum)
 		if err != nil {
 			panic(err)
 		}
-		routes := make([]route, 0, 10) // 根据车次号从路线表中读取
+		routes := make([]Route, 0, 10) // 根据车次号从路线表中读取
 		queryRoute := "select stationName, stationCode, cityCode, depTime, arrTime from routes where tranNum = '" + t.TranNum + "' order by stationIndex"
 		routeRows, _ := db.Query(queryRoute)
 		defer routeRows.Close()
 		routeIdx, arrTime, depTime, date := 0, "", "", time.Now()
 		for routeRows.Next() {
-			r := new(route)
+			r := new(Route)
 			routeRows.Scan(&r.StationName, &r.StationCode, &r.CityCode, &depTime, &arrTime)
 			// 设置出发时间和到达时间，这里有个默认规则：列车在两个站之间的行驶时间不超过24小时，
 			//  如果某列车不满足此规则，则下面这段代码得调整逻辑
@@ -156,7 +156,7 @@ func initTranListFromMySQL() {
 func initCityTranMap() {
 	fmt.Println("begin init cityTranMap")
 	defer fmt.Println("end init cityTranMap")
-	cityTranMap = make(map[string]([]*tran), constCityCount)
+	cityTranMap = make(map[string]([]*Tran), constCityCount)
 	for i := 0; i < len(tranList); i++ {
 		for j := 0; j < len(tranList[i].RouteTimetable); j++ {
 			cityCode := tranList[i].RouteTimetable[j].CityCode
@@ -164,7 +164,7 @@ func initCityTranMap() {
 			if exist {
 				tranPtrs = append(tranPtrs, &tranList[i])
 			} else {
-				tranPtrs = []*tran{&tranList[i]}
+				tranPtrs = []*Tran{&tranList[i]}
 			}
 			cityTranMap[cityCode] = tranPtrs
 		}
@@ -176,41 +176,30 @@ func initTranScheduleMap() {
 	fmt.Println("begin init tranScheduleMap")
 	defer fmt.Println("end init tranScheduleMap")
 
-	//tranSchedules := getCollection("")
-	tranScheduleMap = make(map[string]([]tran), constDays)
+	tranScheduleMap = make(map[string]([]Tran), 30)
+	session := getMgoSession()
+	defer session.Close()
+	schedules := session.DB(mgoDbName).C("tranSchedules")
 	now := time.Now()
-	var zeroTime time.Time
-	for i := 0; i < len(tranList); i++ {
-		for d := 0; d < constDays; d++ {
-			date := now.AddDate(0, 0, d).Format(constYmdFormat)
-			trans, exist := tranScheduleMap[date]
-			if !exist {
-				trans = make([]tran, 0, constTranCount)
-			}
-			tmepTran := tranList[i]
-			tranList[i].DepartureDate = now.AddDate(0, 0, d).Format(constYmdFormat)
-			for r := 0; r < len(tmepTran.RouteTimetable); r++ {
-				if tmepTran.RouteTimetable[r].DepTime != zeroTime {
-					tmepTran.RouteTimetable[r].DepTime = tmepTran.RouteTimetable[r].DepTime.AddDate(0, 0, d)
-				}
-				if tmepTran.RouteTimetable[r].ArrTime != zeroTime {
-					tmepTran.RouteTimetable[r].ArrTime = tmepTran.RouteTimetable[r].ArrTime.AddDate(0, 0, d)
-				}
-			}
-			tranScheduleMap[date] = append(trans, tranList[i])
+	for d := 0; d <= constDays; d++ {
+		date := now.AddDate(0, 0, d).Format(constYmdFormat)
+		trans := make([]Tran, 0, constTranCount)
+		if err := schedules.Find(bson.M{"departureDate": date}).All(&trans); err != nil {
+			panic(err)
 		}
+		tranScheduleMap[date] = trans
 	}
 }
 
 // 余票信息按出发时间排序，也可以丢到前端去排序，js的排序还是比较方便的
-type remainingTicketSort []*remainingTickets
+type remainingTicketSort []*RemainingTickets
 
 func (r remainingTicketSort) Len() int           { return len(r) }
 func (r remainingTicketSort) Swap(i, j int)      { r[i], r[j] = r[j], r[i] }
 func (r remainingTicketSort) Less(i, j int) bool { return r[i].depTime.Before(r[j].depTime) }
 
-// 余票信息结构
-type remainingTickets struct {
+// RemainingTickets 余票信息结构
+type RemainingTickets struct {
 	tranNum            string    // 车次号
 	date               string    // 发车日期
 	routeCount         uint8     // 列车运行的路段数
@@ -225,8 +214,8 @@ type remainingTickets struct {
 	remark             string    // 不售票的说明
 }
 
-func newRemainingTickets(t *tran, depIdx, arrIdx uint8) *remainingTickets {
-	r := &remainingTickets{
+func newRemainingTickets(t *Tran, depIdx, arrIdx uint8) *RemainingTickets {
+	r := &RemainingTickets{
 		tranNum:        t.TranNum,
 		date:           t.RouteTimetable[0].DepTime.Format(constYmdFormat),
 		routeCount:     uint8(len(t.RouteTimetable)) - 1,
@@ -245,7 +234,7 @@ func newRemainingTickets(t *tran, depIdx, arrIdx uint8) *remainingTickets {
 }
 
 // 结果转为字符串
-func (r *remainingTickets) toString() string {
+func (r *RemainingTickets) toString() string {
 	list := []string{r.tranNum, r.date, strconv.Itoa(int(r.routeCount)),
 		strconv.Itoa(int(r.depIdx)), r.depStationCode, r.depTime.Format(constHmFormat),
 		strconv.Itoa(int(r.arrIdx)), r.arrStationCode, r.arrTime, r.costTime}
@@ -277,7 +266,7 @@ func QueryMatchTransInfo(depStationName, arrStationName string, queryDate time.T
 	}
 	arrS := getStationInfoByName(arrStationName)
 	availableTime := time.Now().Add(constQueryTranDelay * time.Minute)
-	resultCh := make(chan *remainingTickets, 20)
+	resultCh := make(chan *RemainingTickets, 20)
 	defer close(resultCh)
 	matchTranCount := 0
 	for i := 0; i < len(depTrans); i++ {
@@ -306,7 +295,7 @@ func QueryMatchTransInfo(depStationName, arrStationName string, queryDate time.T
 				}
 				matchTranCount++
 				goPool.Take()
-				go func(tranInfo *tran, depIdx, arrIdx uint8) {
+				go func(tranInfo *Tran, depIdx, arrIdx uint8) {
 					defer goPool.Return()
 					resultCh <- trans[i].GetTranInfoAndSeatCount(depIdx, arrIdx, tranInfo.CarTypesIdx, isStudent)
 				}(depTrans[i], depIdx, arrIdx)
@@ -314,7 +303,7 @@ func QueryMatchTransInfo(depStationName, arrStationName string, queryDate time.T
 			}
 		}
 	}
-	resultList := make([]*remainingTickets, matchTranCount)
+	resultList := make([]*RemainingTickets, matchTranCount)
 	for i := 0; i < matchTranCount; i++ {
 		resultList[i] = <-resultCh
 	}
@@ -369,13 +358,15 @@ func QuerySeatPrice(tranNum string, depIdx, arrIdx uint8) (result map[string]flo
 //////////////////////////////////////////////
 ///          列车结构体及其方法              ///
 //////////////////////////////////////////////
-type tran struct {
+
+// Tran 列车信息结构体
+type Tran struct {
 	TranNum        string    `bson:"tranNum"`        // 车次号
 	DepartureDate  string    `bson:"departureDate"`  // 发车日期
 	SaleTicketTime time.Time `bson:"saleTicketTime"` // 售票时间
 	NotSaleRemark  string    `bson:"notSaleRemark"`  // 不售票的说明，路线调整啥的
-	RouteTimetable []route   `bson:"routeTimetable"` // 时刻表
-	Cars           []car     `bson:"cars"`           // 车厢
+	RouteTimetable []Route   `bson:"routeTimetable"` // 时刻表
+	Cars           []Car     `bson:"cars"`           // 车厢
 	// 各种类型车厢的起始索引
 	// 依次是：商务座、一等座、二等座、高级软卧、软卧、动卧、硬卧、软座、硬座
 	// 若值是[0, 1, 4, 6, 6, 6, 6, 6, 10, 15]，
@@ -384,13 +375,26 @@ type tran struct {
 	FullSeatBit          uint64    `bson:"fullSeatBit"`          // 全程满座的位标记值，某座位的位标记与此值相等时，表示该座位全程满座了
 	RunDays              uint8     `bson:"runDays"`              // 一趟行程运行多少天，次日达则值应为2
 	ScheduleIntervalDays uint8     `bson:"scheduleIntervalDays"` // 间隔多少天发一趟车，绝大多数是1天
+	EnableLevel          uint8     `bson:"enableLevel"`          // 生效级别 0为最高级别，默认级别为1
 	EnableStartDate      time.Time `bson:"enableStartDate"`      // 时刻表生效截止日期
 	EnableEndDate        time.Time `bson:"enableEndDate"`        // 车厢信息生效截止日期
 	// 各类席位在各路段的价格
 	SeatPriceMap map[string]([]float32) `bson:"seatPriceMap"`
 }
 
-func (t *tran) setRoutes(routes *[]route) {
+// QueryTrans 查询列车信息
+func QueryTrans(tranNum, tranType string, pageIdx, pageSize int) (result []Tran) {
+	session := getMgoSession()
+	defer session.Close()
+	tranCol := session.DB(mgoDbName).C("tranInfo")
+	err := tranCol.Find(bson.M{"tranNum": bson.M{"$regex": tranNum, "$options": "$i"}}).Sort("tranNum").Skip((pageIdx - 1) * pageSize).Limit(pageSize).All(&result)
+	if err != nil {
+		panic(err)
+	}
+	return
+}
+
+func (t *Tran) setRoutes(routes *[]Route) {
 	t.RouteTimetable = *routes
 	routeCount := len(t.RouteTimetable) - 1
 	t.FullSeatBit = countSeatBit(0, uint8(routeCount))
@@ -400,7 +404,7 @@ func (t *tran) setRoutes(routes *[]route) {
 }
 
 // 根据起止站获取各类座位的票价
-func (t *tran) getSeatPrice(depIdx, arrIdx uint8) (result map[string]float32) {
+func (t *Tran) getSeatPrice(depIdx, arrIdx uint8) (result map[string]float32) {
 	for seatType, eachRoutePrice := range t.SeatPriceMap {
 		var price float32
 		for i := depIdx; i < arrIdx; i++ {
@@ -412,7 +416,7 @@ func (t *tran) getSeatPrice(depIdx, arrIdx uint8) (result map[string]float32) {
 }
 
 // IsMatchStation 判断当前车次在站点是否匹配
-func (t *tran) IsMatchStation(depS, arrS *station) (depIdx, arrIdx uint8, ok bool) {
+func (t *Tran) IsMatchStation(depS, arrS *station) (depIdx, arrIdx uint8, ok bool) {
 	depI := -1
 	// 出发地与目的地是不同的城市
 	if depS.CityCode != arrS.CityCode {
@@ -446,7 +450,7 @@ func (t *tran) IsMatchStation(depS, arrS *station) (depIdx, arrIdx uint8, ok boo
 }
 
 // GetTranInfoAndSeatCount 返回车次信息、起止站在时刻表中的索引、各类座位余票数、可售标记、不售票说明
-func (t *tran) GetTranInfoAndSeatCount(depIdx, arrIdx uint8, carTypeIdx []uint8, isStudent bool) (remain *remainingTickets) {
+func (t *Tran) GetTranInfoAndSeatCount(depIdx, arrIdx uint8, carTypeIdx []uint8, isStudent bool) (remain *RemainingTickets) {
 	remain = newRemainingTickets(t, depIdx, arrIdx)
 	// 有不售票说明，表示当前不售票，不用查余票数
 	if t.NotSaleRemark != "" {
@@ -484,33 +488,34 @@ func (t *tran) GetTranInfoAndSeatCount(depIdx, arrIdx uint8, carTypeIdx []uint8,
 //////////////////////////////////////////////
 ///          车厢结构体及其对应方法          ///
 //////////////////////////////////////////////
-type car struct {
+
+// Car 车厢信息结构体
+type Car struct {
 	CarNum                 uint8   `bson:"carNum"`                 // 车厢编号
 	SeatType               string  `bson:"seatType"`               // 车厢的座位类型
-	Seats                  []seat  `bson:"seats"`                  // 车厢的所有座位
-	NoSeats                []seat  `bson:"noSeats"`                // 车厢内站票，无站票时此长度为零
+	Seats                  []Seat  `bson:"seats"`                  // 车厢的所有座位
+	NoSeatCount            uint8   `bson:"noSeatCount"`            // 车厢内站票数
 	EachRouteTravelerCount []uint8 `bson:"eachRouteTravelerCount"` // 各路段乘客人数，用于计算可拼凑的站票数，仅在有站票的车厢使用
 	sync.RWMutex                   // 读写锁，用于保护各路段乘客人数字段
 }
 
 // getAvailableSeat 获取可预订的座位,是否获取成功标记,是否为拼凑的站票标记
-func (c *car) getAvailableSeat(seatBit uint64, isStudent, acceptNoSeat bool, depIdx, arrIdx uint8) (s *seat, ok, isMedley bool) {
+func (c *Car) getAvailableSeat(seatBit uint64, isStudent bool) (s *Seat, ok bool) {
 	for i := 0; i < len(c.Seats); i++ {
 		if c.Seats[i].IsAvailable(seatBit, isStudent) {
-			return &c.Seats[i], true, false
+			return &c.Seats[i], true
 		}
 	}
-	if !acceptNoSeat || len(c.NoSeats) == 0 {
-		return nil, false, false
-	}
-	for i := 0; i < len(c.NoSeats); i++ {
-		if c.NoSeats[i].IsAvailable(seatBit, true) {
-			return &c.NoSeats[i], true, false
-		}
+	return nil, false
+}
+
+func (c *Car) getAvailableNoSeat(seatBit uint64, depIdx, arrIdx uint8) (s *Seat, ok bool) {
+	if c.NoSeatCount == 0 {
+		return nil, false
 	}
 	// 下面开始查找拼凑的站票
 	// 非站票数与站票数之和
-	totalSeatCount := len(c.Seats) + len(c.NoSeats)
+	totalSeatCount := len(c.Seats) + int(c.NoSeatCount)
 	// 旅途中当前车厢旅客最大数
 	var maxTravelerCountInRoute uint8
 	c.RLock()
@@ -521,19 +526,19 @@ func (c *car) getAvailableSeat(seatBit uint64, isStudent, acceptNoSeat bool, dep
 		}
 	}
 	if totalSeatCount-int(maxTravelerCountInRoute) > 0 {
-		s = &seat{SeatNum: "", SeatBit: seatBit}
-		return s, true, true
+		s = &Seat{SeatNum: "", SeatBit: seatBit}
+		return s, true
 	}
-	return nil, false, false
+	return nil, false
 }
 
-func (c *car) getAvailableNoSeatCount(seatBit uint64, depIdx, arrIdx uint8) uint8 {
+func (c *Car) getAvailableNoSeatCount(seatBit uint64, depIdx, arrIdx uint8) uint8 {
 	// 车厢未设置站票时，直接返回 0
-	if len(c.NoSeats) == 0 {
+	if c.NoSeatCount == 0 {
 		return 0
 	}
 	// 非站票数与站票数之和
-	totalSeatCount := len(c.Seats) + len(c.NoSeats)
+	totalSeatCount := len(c.Seats) + int(c.NoSeatCount)
 	// 旅途中当前车厢旅客最大数
 	var maxTravelerCountInRoute uint8
 	c.RLock()
@@ -547,21 +552,19 @@ func (c *car) getAvailableNoSeatCount(seatBit uint64, depIdx, arrIdx uint8) uint
 }
 
 // 某座位被占用
-func (c *car) occupySeat(depIdx, arrIdx uint8) bool {
-	noSeatLen := len(c.NoSeats)
-	if noSeatLen == 0 {
+func (c *Car) occupySeat(depIdx, arrIdx uint8) bool {
+	if c.NoSeatCount == 0 {
 		return true
 	}
 	c.Lock()
 	defer c.Unlock()
-	seatLen := len(c.Seats)
 	var maxCount uint8
 	for i := depIdx; i < arrIdx; i++ {
 		if c.EachRouteTravelerCount[i] > maxCount {
 			maxCount = c.EachRouteTravelerCount[i]
 		}
 	}
-	if maxCount >= uint8(seatLen+noSeatLen) {
+	if maxCount >= uint8(len(c.Seats))+c.NoSeatCount {
 		return false
 	}
 	for i := depIdx; i < arrIdx; i++ {
@@ -571,8 +574,8 @@ func (c *car) occupySeat(depIdx, arrIdx uint8) bool {
 }
 
 // 某座位被释放
-func (c *car) releaseSeat(depIdx, arrIdx uint8) {
-	if len(c.NoSeats) != 0 {
+func (c *Car) releaseSeat(depIdx, arrIdx uint8) {
+	if c.NoSeatCount != 0 {
 		c.Lock()
 		defer c.Unlock()
 		for i := depIdx; i < arrIdx; i++ {
@@ -584,7 +587,9 @@ func (c *car) releaseSeat(depIdx, arrIdx uint8) {
 //////////////////////////////////////////////
 ///          座位结构体及其对应方法          ///
 //////////////////////////////////////////////
-type seat struct {
+
+// Seat 座位信息结构体
+type Seat struct {
 	SeatNum    string `bson:"seatNum"`   // 座位号
 	IsStudent  bool   `bson:"isStudent"` // 是否学生票
 	SeatBit    uint64 `bson:"seatBit"`   // 座位的位标记，64位代表64个路段，值为7时，表示从起始站到第四站，这个座位都被人订了
@@ -592,12 +597,12 @@ type seat struct {
 }
 
 // IsAvailable 根据路段和乘客类型判断能否订票
-func (s *seat) IsAvailable(seatBit uint64, isStudent bool) bool {
+func (s *Seat) IsAvailable(seatBit uint64, isStudent bool) bool {
 	return (s.IsStudent == isStudent) && (s.SeatBit^seatBit == s.SeatBit+seatBit)
 }
 
 // Book 订票
-func (s *seat) Book(seatBit, tranFullSeatBit uint64, isStudent bool) bool {
+func (s *Seat) Book(seatBit, tranFullSeatBit uint64, isStudent bool) bool {
 	s.Lock()
 	defer s.Unlock()
 	if !s.IsAvailable(seatBit, isStudent) {
@@ -607,8 +612,8 @@ func (s *seat) Book(seatBit, tranFullSeatBit uint64, isStudent bool) bool {
 	return true
 }
 
-// Refund 退票或取消订单，释放座位对应路段的资源
-func (s *seat) Release(seatBit uint64) {
+// Release 退票或取消订单，释放座位对应路段的资源
+func (s *Seat) Release(seatBit uint64) {
 	s.Lock()
 	defer s.Unlock()
 	s.SeatBit ^= (^seatBit)

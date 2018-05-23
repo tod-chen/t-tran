@@ -1,0 +1,47 @@
+{{ template "header" }}
+<link href="../content/css/trans.css" rel="stylesheet" />
+<script src="../content/js/trans.js"></script>
+
+<div class="row">
+    <div class="col-3 form-inline">
+        <label for="tranNum">车次:</label>
+        <input type="text" class="form-control" id="tranNum" placeholder="车次号"/>
+    </div>
+    <div class="col-3 form-inline">
+        <label for="tranType">类型:</label>
+        <select class="form-control" id="tranType">
+            <option value="">All</option>
+            <option value="G">高铁</option>
+            <option value="D">动车</option>
+            <option value="C">直达</option>
+            <option value="T">特快</option>
+            <option value="Z">直达</option>
+            <option value="K">普快</option>
+            <option value="O">其他</option>
+        </select>
+    </div>
+    <div class="col-2">
+        <button class="btn" id="btn-query"><i class="fa fa-search"></i> 查询</button>
+    </div>
+</div>
+
+<table class="table table-sm table-striped table-hover">
+    <thead class="thead-light">
+        <tr>
+            <th>车次</th>
+            <th>路线</th>
+            <th>车厢</th>
+            <th>生效等级</th>
+            <th>生效开始日期</th>
+            <th>生效截止日期</th>
+        </tr>
+    </thead>
+    <tbody id="transBody">
+    </tbody>
+</table>
+<ul class="pagination">
+    <li id="firstPage" class="page-item"><a class="page-link" href="">Previous</a></li>
+    <li class="page-item"><a class="page-link" href="">Next</a></li>
+</ul>
+
+{{ template "footer"}}

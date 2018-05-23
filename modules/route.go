@@ -5,7 +5,8 @@ import (
 	"time"
 )
 
-type route struct {
+// Route 时刻表信息
+type Route struct {
 	StationName     string    `bson:"stationName"`     //车站名
 	StationCode     string    `bson:"stationCode"`     //车站编码
 	CityCode        string    `bson:"cityCode"`        //城市编码
@@ -19,21 +20,21 @@ const (
 	constStrNullTime = "----"
 )
 
-func (r *route) getStrDep() string {
+func (r *Route) getStrDep() string {
 	if r.DepTime.Year() == 1 {
 		return constStrNullTime
 	}
 	return r.DepTime.Format(constHmFormat)
 }
 
-func (r *route) getStrArr() string {
+func (r *Route) getStrArr() string {
 	if r.ArrTime.Year() == 1 {
 		return constStrNullTime
 	}
 	return r.ArrTime.Format(constHmFormat)
 }
 
-func (r *route) getStrStayTime() string {
+func (r *Route) getStrStayTime() string {
 	if r.DepTime.Year() == 1 || r.ArrTime.Year() == 1 {
 		return constStrNullTime
 	}
