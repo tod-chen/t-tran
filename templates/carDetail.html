@@ -1,3 +1,89 @@
 {{ template "header" }}
 
+<link rel="stylesheet" href="../content/css/carDetail.css">
+<script src="../content/js/carDetail.js"></script>
+
+<div class="card mt15">
+    <div class="card-header">
+        <a class="card-link" data-toggle="collapse" href="#car-detail">常规</a>
+    </div>
+    <div id="car-detail" class="collapse show">
+        <div class="card-block">
+            <div class="row pad15">
+                <input type="hidden" id="carId">
+                <div class="form-group col-md-3 pr0">
+                    <label class="control-label">适用车次类型</label>
+                    <select class="form-control" id="tranType"></select>
+                </div>
+                <div class="form-group col-md-3 pr0">
+                    <label class="control-label">席别</label>
+                    <select class="form-control" id="seatType"></select>
+                </div>
+                <div class="form-group col-md-3 pr0">
+                    <label class="control-label">站票数</label>
+                    <input class="form-control" id="noSeatCount" type="number" min="0">
+                </div>
+                <div class="form-group col-md-3 pr0">
+                    <label class="control-label">备注</label>
+                    <input class="form-control" id="remark" type="text" placeholder="车厢说明">
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<div class="card mt10">
+    <div class="card-header">
+        <a class="card-link" data-toggle="collapse" href="#car-seats">座位</a>
+        <span class="card-link ml20">座位数:<span id="seatCount"></span></span>
+        <span class="card-link ml10">学生票数:<span id="studentCount"></span></span>
+        <div class="float-right form-inline">
+            <div class="input-group input-group-sm mr10" style="width:115px;">
+                <div class="input-group-prepend">
+                    <span class="input-group-text">共</span>
+                </div>
+                <input type="number" min="1" id="seatRowCount" class="form-control form-control-sm" placeholder="10">
+                <div class="input-group-append">
+                    <span class="input-group-text" id="basic-addon2">排</span>
+                </div>
+            </div>
+            <div class="input-group input-group-sm mr10" style="width:120px;">
+                <div class="input-group-prepend">
+                    <span class="input-group-text" id="basic-addon2">每排</span>
+                </div>
+                <input type="number" min="1" id="rowSeatCount" class="form-control form-control-sm" placeholder="5">
+                <div class="input-group-append">
+                    <span class="input-group-text" id="basic-addon2">座</span>
+                </div>
+            </div>
+            <div class="input-group input-group-sm" style="width:225px;">
+                <div class="input-group-prepend">
+                    <span class="input-group-text" id="basic-addon2">座位号后缀</span>
+                </div>
+                <input type="text" id="seatNumSuffix" class="form-control form-control-sm" placeholder="A,B,C,D,F">
+                <div class="input-group-append">
+                    <button class="btn btn-success" id="btn-add-seat"><i class="fa fa-plus"></i>添加</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="car-seats" class="collapse">
+        <div class="card-block p15" id="seat-content"></div>
+    </div>
+</div>
+<div class="tac mt15">
+    <button class="btn btn-success" id="btn-save" ><i class="fa fa-save"></i>保存</button>
+    <button class="btn btn-secondary" id="btn-cancel" ><i class="fa fa-undo"></i>取消</button>
+</div>
 {{ template "footer"}}
+
+<div class="hidden" id="seat-item-tpl">        
+    <div class="seat-item input-group input-group-sm">
+        <input type="text" class="form-control form-control-sm" placeholder="座号" name="seatNum" >
+        <div class="input-group-append">
+            <span class="input-group-text">
+                <input type="checkbox" name="isStudent">学生
+            </span>
+        </div>
+        <i class="fa fa-remove" title="删除"></i>
+    </div>
+</div>

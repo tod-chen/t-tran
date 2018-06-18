@@ -1,3 +1,143 @@
 {{ template "header" }}
 
+<link rel="stylesheet" href="../content/css/tranDetail.css">
+<script src="../content/js/tranDetail.js"></script>
+
+<div class="card mt15">
+    <div class="card-header">
+        <a class="card-link" data-toggle="collapse" data-parent="#accordion" href="#tran-detail">常规</a>
+    </div>
+    <div id="tran-detail" class="collapse show">
+        <div class="card-block">
+            <div class="row pt15 pl15 mr15">
+                <input type="hidden" id="tranId">
+                <div class="form-group col-md-2 pr0">
+                    <label class="control-label">车次</label>
+                    <input class="form-control" type="text" id="tranNum" disabled="disabled" />
+                </div>
+                <div class="form-group col-md-2 pr0">
+                    <label class="control-label">跨天数</label>
+                    <input class="form-control" type="text" id="durationDay" disabled="disabled" />
+                </div>
+                <div class="form-group col-md-2 pr0">
+                    <label class="control-label">排班间隔天数</label>
+                    <input class="form-control" type="number" id="scheduleDay" min="1" />
+                </div>
+                <div class="form-group col-md-2 pr0">
+                    <label class="control-label">生效等级</label>
+                    <select class="form-control" id="enableLevel" >
+                        <option value="0">高</option>
+                        <option value="1">低</option>
+                    </select>
+                </div>
+                <div class="form-group col-md-2 pr0">
+                    <label class="control-label">生效开始时间</label>
+                    <input class="form-control" type="date" id="enableSD"/>
+                </div>
+                <div class="form-group col-md-2 pr0">
+                    <label class="control-label">生效结束时间</label>
+                    <input class="form-control" type="date" id="enableED"/>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<div class="card mt10">
+    <div class="card-header">
+        <a class="collapsed card-link" data-toggle="collapse" data-parent="#accordion" href="#tran-timetable">时刻表</a>
+    </div>
+    <div id="tran-timetable" class="collapse">
+        <div class="card-block">
+            <ul id="timetable-tab" class="nav nav-tabs">
+                <li class="nav-item">
+                    <a class="nav-link" href="#" id="btn-add-timetable">
+                        <i class="fa fa-plus" title="添加"></i>
+                    </a>
+                </li>
+            </ul>
+            <div id="timetable-content" class="tab-content">
+
+            </div>
+        </div>
+    </div>
+</div>
+<div class="card mt10">
+    <div class="card-header">
+        <a class="collapsed card-link" data-toggle="collapse" data-parent="#accordion" href="#tran-cars">车厢</a>
+        <button type="button" class="btn btn-sm btn-success float-right" id="btn-add-car">
+            <i class="fa fa-plus"></i>添加</button>
+    </div>
+    <div id="tran-cars" class="collapse">
+        <div id="cars-content" class="card-block">
+        </div>
+    </div>
+</div>
+<div class="card mt10">
+    <div class="card-header">
+        <a class="collapsed card-link" data-toggle="collapse" data-parent="#accordion" href="#route-price">各路段价格</a>
+    </div>
+    <div id="route-price" class="collapse">
+        <div id="route-price-conent" class="card-block">
+            
+        </div>
+    </div>
+</div>
+<div class="tac mt15">
+    <button class="btn btn-success" id="btn-save" ><i class="fa fa-save"></i>保存</button>
+    <button class="btn btn-secondary" id="btn-cancel" ><i class="fa fa-undo"></i>取消</button>
+</div>
 {{ template "footer"}}
+
+<div class="hidden" id="timetable-item-tpl">
+    <div class="tab-pane fade" id="timetable-item-0">
+        <div class="row p15 mr0">
+            <div class="form-group col-md-2 pr0">
+                <label class="control-label">车站名</label>
+                <input class="form-control" type="text" placeholder="" name="stationName"/>
+            </div>
+            <div class="form-group col-md-2 pr0">
+                <label class="control-label">到站时间</label>
+                <input class="form-control" type="time" placeholder="" name="arrTime" />
+            </div>
+            <div class="form-group col-md-2 pr0">
+                <label class="control-label">出发时间</label>
+                <input class="form-control" type="time" placeholder="" name="depTime" />
+            </div>
+            <div class="form-group col-md-2 pr0">
+                <label class="control-label">检票口</label>
+                <input class="form-control" type="text" placeholder="" name="checkTicketGate" />
+            </div>
+            <div class="form-group col-md-2 pr0">
+                <label class="control-label">乘车站台编号</label>
+                <input class="form-control" type="number" min="1" placeholder="" name="platform" />
+            </div>
+            <div class="form-group col-md-2 pr0">
+                <label class="control-label">距下站里程</label>
+                <input class="form-control" type="number" min="0" placeholder="" name="maleageNext" />
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="hidden" id="cars-item-tpl">
+    <div class="form-inline pt15">
+        <div class="form-group col-md-4">
+            <label class="control-label">席别</label>
+            <select class="form-control" name="seat"></select>
+        </div>
+        <div class="form-group col-md-4">
+            <label class="control-label">细分</label>
+            <select class="form-control" name="carId"></select>
+        </div>
+        <div class="form-group col-md-2">
+            <label class="control-label">数量</label>
+            <input class="form-control" type="number" min="1" placeholder="1" name="carCount"/>
+        </div>
+        <div class="col-md-2">
+            <button class="btn btn-primary float-right"><i class="fa fa-remove"></i>删除</button>
+        </div>
+    </div>
+</div>
+<select class="hidden" id="selectable-cars">
+    
+</select>

@@ -1,3 +1,37 @@
 {{ template "header" }}
 
+<script src="../content/js/stations.js"></script>
+
+<div class="row mt10">
+    <div class="col-3 form-inline">
+        <label for="stationName">车站名:</label>
+        <input class="form-control" id="stationName" type="text" placeholder="北京南 / 上海虹桥" />
+    </div>
+    <div class="col-3 form-inline">
+        <label for="cityName">城市名:</label>
+        <input class="form-control" id="cityName" type="text" placeholder="北京 / 上海" />
+    </div>
+    <div class="col-2">
+        <button class="btn" id="btn-query"><i class="fa fa-search"></i> 查询</button>
+    </div>
+    <div class="col-4">
+        <a class="btn btn-primary float-right" target="_black" href="/stations/detail" ><i class="fa fa-plus"></i> 新增</a>
+    </div>
+</div>
+
+<table class="table table-sm table-striped table-hover mt10">
+    <thead class="thead-light">
+        <tr>
+            <th>车站名</th>
+            <th>车站编码</th>
+            <th>是否载客</th>
+            <th>城市编码</th>
+            <th>车站地址</th>
+        </tr>
+    </thead>
+    <tbody id="stationsBody">
+    </tbody>
+</table>
+
+{{ template "pager" }}
 {{ template "footer"}}

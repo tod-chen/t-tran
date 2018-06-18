@@ -1,9 +1,12 @@
 package modules
 
 import (
-	"database/sql"
+	"fmt"
+	"time"
+
+	"github.com/jinzhu/gorm"
 	// mysql
-	_ "github.com/go-sql-driver/mysql"
+	_ "github.com/jinzhu/gorm/dialects/mysql"
 
 	"gopkg.in/mgo.v2"
 )
@@ -11,7 +14,29 @@ import (
 var (
 	mgoSession *mgo.Session
 	mgoDbName  = "t-tran"
+	db         *gorm.DB
+
+	// 所有车次信息，不参与订票，用于查询列车的时刻表和各路段各座次的价格
+	tranList []TranInfo
+	// 各城市与经过该城市的列车映射
+	cityTranMap map[string]([]*TranInfo)
+	// 列车按日期安排表
+	scheduleTranMap map[string]([]ScheduleTran)
 )
+
+// Config 配置项
+type Config struct {
+	Key   string // 配置名
+	Value string // 配置值
+}
+
+// DBModel 数据库模型
+type DBModel struct {
+	// 主键
+	ID       uint      `gorm:"primary_key;AUTO_INCREMENT(1)" json:"id"`
+	CreateAt time.Time `gorm:"type:datetime"` // 创建时间
+	UpdateAt time.Time `gorm:"type:datetime"` // 更新时间
+}
 
 func getMgoSession() *mgo.Session {
 	if mgoSession == nil {
@@ -26,12 +51,34 @@ func getMgoSession() *mgo.Session {
 }
 
 func init() {
-	db, err := sql.Open("mysql", "root:@tcp(localhost:3306)/t-tran?charset=utf8")
+	fmt.Println("init modules beginning")
+	defer fmt.Println("init modules end")
+	var err error
+	db, err = gorm.Open("mysql", "root:@/t-tran?charset=utf8&parseTime=True&loc=Local")
 	if err != nil {
 		panic(err)
 	}
-	defer db.Close()
-	initStation(db)
-	initTran()
-	initGoPool()
+
+	if !db.HasTable(&Config{}) {
+		fmt.Println("create tables beginning")
+		defer fmt.Println("create tables end")
+		db.CreateTable(&Config{})
+		db.CreateTable(&Station{})
+		db.CreateTable(&TranInfo{})
+		db.CreateTable(&Route{})
+		db.CreateTable(&RoutePrice{})
+		db.CreateTable(&Car{})
+		db.CreateTable(&Seat{})
+		db.CreateTable(&ScheduleTran{})
+		db.CreateTable(&ScheduleCar{})
+		db.CreateTable(&ScheduleSeat{})
+		db.CreateTable(&Order{})
+		db.CreateTable(&User{})
+		db.CreateTable(&UserContact{})
+	}
+
+	// initGoPool()
+	// initStation()
+	// initTranInfo()
+	// initTranScheduleMap()
 }

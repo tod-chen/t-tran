@@ -1,3 +1,34 @@
 {{ template "header" }}
 
+<script src="../content/js/schedules.js"></script>
+
+<div class="row mt10">
+    <div class="col-3 form-inline">
+        <label for="departureDate">发车日期:</label>
+        <input class="form-control" id="departureDate" type="date" placeholder="2018-01-01" />
+    </div>
+    <div class="col-3 form-inline">
+        <label for="tranNum">车次:</label>
+        <input class="form-control" id="tranNum" type="text" placeholder="G34" />
+    </div>
+    <div class="col-2">
+        <button class="btn" id="btn-query"><i class="fa fa-search"></i> 查询</button>
+    </div>
+</div>
+
+<table class="table table-sm table-striped table-hover mt10">
+    <thead class="thead-light">
+        <tr>
+            <th>操作</th>
+            <th>发车日期</th>
+            <th>车次</th>
+            <th>售票时间</th>
+            <th>不售票说明</th>
+        </tr>
+    </thead>
+    <tbody id="schedulesBody">
+    </tbody>
+</table>
+
+{{ template "pager" }}
 {{ template "footer"}}

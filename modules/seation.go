@@ -1,38 +1,28 @@
 package modules
 
-import (
-	"database/sql"
-	"fmt"
-)
-
 // 车站集合
-var stations []station
+var stations []Station
 
-func initStation(db *sql.DB) {
-	fmt.Println("begin init stations")
-	defer fmt.Println("end init stations")
-	stations = make([]station, 0, 2400)
-	query := "select stationName, stationCode, cityCode from stations where isPassenger is not null"
-	rows, err := db.Query(query)
-	if err != nil {
-		panic("query error")
-	}
-	defer rows.Close()
-	for rows.Next() {
-		s := new(station)
-		rows.Scan(&s.StationName, &s.StationCode, &s.CityCode)
-		stations = append(stations, *s)
-	}
+func initStation() {
+	// fmt.Println("init stations beginning")
+	// defer fmt.Println("init stations end")
+	db.Where("isPassenger = 1").Find(&stations)
+	//fmt.Println("stations count:", len(stations))
 }
 
-type station struct {
-	StationName string
-	StationCode string
-	CityCode    string
+// Station 车站信息
+type Station struct {
+	StationName   string  // 车站名
+	StationCode   string // 车站编码
+	StationPinyin string // 车站拼音
+	CityCode      string // 城市编码
+	CityName      string // 城市名
+	IsPassenger   bool   // 是否为客运站
+	DBModel
 }
 
 // 根据站点名，找出站点编码与城市编码
-func getStationInfoByName(stationName string) *station {
+func getStationInfoByName(stationName string) *Station {
 	for i := 0; i < len(stations); i++ {
 		if stations[i].StationName == stationName {
 			return &stations[i]

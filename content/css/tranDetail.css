@@ -1,0 +1,21 @@
+#timetable-tab a.active{
+    background-color: #007bff;
+    color: white;
+}
+
+#timetable-tab a i.fa-remove {
+    display: none;
+}
+
+#timetable-tab a:hover{
+    background-color: #aedde3;
+    padding-right: 20px;
+}
+
+#timetable-tab a:hover i.fa-remove {
+    position: absolute;
+    margin-top: -10px;
+    margin-left: 6px;
+    color: blueviolet;
+    display: inline-flex;
+}

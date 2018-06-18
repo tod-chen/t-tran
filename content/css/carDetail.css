@@ -1,0 +1,23 @@
+
+#car-seats{
+    max-height: 350px;
+    overflow-y: auto;
+}
+
+.seat-item{
+    float: left;
+    margin:0 5px 5px 0px;
+    border: 1px solid #ccc;
+    border-radius: .25rem;
+    width:130px;
+    padding:5px;
+}
+
+.seat-item span{
+    padding: 3px !important;
+}
+
+.seat-item i.fa{
+    color: blueviolet;
+    margin:8px 0 0 5px;
+}

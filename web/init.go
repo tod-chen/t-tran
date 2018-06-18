@@ -8,18 +8,19 @@ import (
 )
 
 func init() {
+	gin.SetMode(gin.ReleaseMode)
 	// web engine
-	router := gin.Default()
+	g := gin.Default()
 	// load html files, tpl files
-	router.LoadHTMLGlob("templates/*")
+	g.LoadHTMLGlob("templates/*")
 	// load resource files, js/css etc.
-	router.Static("/content", "content")
+	g.Static("/content", "content")
 	// set admin router
-	setAdminRoute(router)
+	setAdminRoute(g)
 	// set server info
 	s := &http.Server{
 		Addr:           ":8080",
-		Handler:        router,
+		Handler:        g,
 		ReadTimeout:    10 * time.Second,
 		WriteTimeout:   10 * time.Second,
 		MaxHeaderBytes: 1 << 20,

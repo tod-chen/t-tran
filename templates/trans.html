@@ -2,7 +2,7 @@
 <link href="../content/css/trans.css" rel="stylesheet" />
 <script src="../content/js/trans.js"></script>
 
-<div class="row">
+<div class="row mt10">
     <div class="col-3 form-inline">
         <label for="tranNum">车次:</label>
         <input type="text" class="form-control" id="tranNum" placeholder="车次号"/>
@@ -10,22 +10,25 @@
     <div class="col-3 form-inline">
         <label for="tranType">类型:</label>
         <select class="form-control" id="tranType">
-            <option value="">All</option>
+            <option value="">全部</option>
             <option value="G">高铁</option>
             <option value="D">动车</option>
-            <option value="C">直达</option>
-            <option value="T">特快</option>
+            <option value="C">城际</option>
             <option value="Z">直达</option>
+            <option value="T">特快</option>
             <option value="K">普快</option>
-            <option value="O">其他</option>
+            <option value="[1-9]">其他</option>
         </select>
     </div>
     <div class="col-2">
         <button class="btn" id="btn-query"><i class="fa fa-search"></i> 查询</button>
     </div>
+    <div class="col-4">
+        <a class="btn btn-primary float-right" target="_black" href="/trans/detail" ><i class="fa fa-plus"></i> 新增</a>
+    </div>
 </div>
 
-<table class="table table-sm table-striped table-hover">
+<table class="table table-sm table-striped table-hover mt10">
     <thead class="thead-light">
         <tr>
             <th>车次</th>
@@ -39,9 +42,5 @@
     <tbody id="transBody">
     </tbody>
 </table>
-<ul class="pagination">
-    <li id="firstPage" class="page-item"><a class="page-link" href="">Previous</a></li>
-    <li class="page-item"><a class="page-link" href="">Next</a></li>
-</ul>
-
-{{ template "footer"}}
+{{ template "pager" }}
+{{ template "footer" }}

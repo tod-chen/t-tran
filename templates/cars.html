@@ -1,3 +1,42 @@
 {{ template "header" }}
 
+<script src="../content/js/cars.js"></script>
+
+<div class="row mt10">
+    <div class="col-3 form-inline">
+        <label for="seatType">座次类型:</label>
+        <select class="form-control" id="seatType">
+            <option value="">全部</option>
+        </select>
+    </div>
+    <div class="col-3 form-inline">
+        <label for="tranType">适用车次类型:</label>
+        <select class="form-control" id="tranType">
+            <option value="">全部</option>
+        </select>
+    </div>
+    <div class="col-2">
+        <button class="btn" id="btn-query"><i class="fa fa-search"></i> 查询</button>
+    </div>
+    <div class="col-4">
+        <a class="btn btn-primary float-right" target="_black" href="/cars/detail" ><i class="fa fa-plus"></i> 新增</a>
+    </div>
+</div>
+
+<table class="table table-sm table-striped table-hover mt10">
+    <thead class="thead-light">
+        <tr>
+            <th>操作</th>
+            <th>适用车次类型</th>
+            <th>座次类型</th>
+            <th>座位数/床位数</th>
+            <th>站票数</th>
+            <th>说明</th>
+        </tr>
+    </thead>
+    <tbody id="carsBody">
+    </tbody>
+</table>
+
+{{ template "pager" }}
 {{ template "footer"}}
