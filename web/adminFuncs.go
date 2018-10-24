@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 	"t-tran/modules"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -70,9 +71,15 @@ func tranGetDetail(c *gin.Context) {
 
 func saveTran(c *gin.Context) {
 	var t modules.TranInfo
-	c.BindJSON(&t)
-	fmt.Println(t)
-	c.JSON(http.StatusOK, gin.H{})
+	if err := c.BindJSON(&t); err != nil {
+		fmt.Println(err)
+	}
+	for i := 0; i < len(t.Timetable); i++ {
+		t.Timetable[i].ArrTime.Add(8*time.Hour).AddDate(-1970, 0, 0)
+		t.Timetable[i].DepTime.Add(8*time.Hour).AddDate(-1970, 0, 0)
+	}
+	success, msg := t.Save()
+	c.JSON(http.StatusOK, gin.H{"success": success, "msg": msg})
 }
 
 //////////////////////////////////////////////////
@@ -152,7 +159,14 @@ func scheduleGetDetail(c *gin.Context) {
 }
 
 func saveSchedule(c *gin.Context) {
-	c.HTML(http.StatusOK, "schedules.html", gin.H{})
+	var schedule modules.ScheduleTran
+	if err := c.BindJSON(&schedule); err != nil {
+		log.Panicln(err)
+		c.JSON(http.StatusOK, gin.H{"success": false, "msg": "Post Data Err"})
+		return
+	}
+	success, msg := schedule.Save()
+	c.JSON(http.StatusOK, gin.H{"success": success, "msg": msg})
 }
 
 //////////////////////////////////////////////////

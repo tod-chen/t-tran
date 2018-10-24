@@ -8,20 +8,12 @@ import (
 	// mysql
 	_ "github.com/jinzhu/gorm/dialects/mysql"
 
-	"gopkg.in/mgo.v2"
+	"gopkg.in/mgo.v2"	
 )
 
 var (
 	mgoSession *mgo.Session
-	mgoDbName  = "t-tran"
 	db         *gorm.DB
-
-	// 所有车次信息，不参与订票，用于查询列车的时刻表和各路段各座次的价格
-	tranList []TranInfo
-	// 各城市与经过该城市的列车映射
-	cityTranMap map[string]([]*TranInfo)
-	// 列车按日期安排表
-	scheduleTranMap map[string]([]ScheduleTran)
 )
 
 // Config 配置项
@@ -33,12 +25,13 @@ type Config struct {
 // DBModel 数据库模型
 type DBModel struct {
 	// 主键
-	ID       uint      `gorm:"primary_key;AUTO_INCREMENT(1)" json:"id"`
+	ID       uint64    `gorm:"primary_key;AUTO_INCREMENT(1)" json:"id"`
 	CreateAt time.Time `gorm:"type:datetime"` // 创建时间
 	UpdateAt time.Time `gorm:"type:datetime"` // 更新时间
 }
 
-func getMgoSession() *mgo.Session {
+func getMgoDB() *mgo.Database {
+	var tmpSession *mgo.Session
 	if mgoSession == nil {
 		var err error
 		mgoSession, err = mgo.Dial("localhost:27017")
@@ -46,8 +39,9 @@ func getMgoSession() *mgo.Session {
 			panic(err)
 		}
 		mgoSession.SetMode(mgo.Monotonic, true)
+		tmpSession = mgoSession.Clone()
 	}
-	return mgoSession.Clone()
+	return tmpSession.DB("t-tran")
 }
 
 func init() {
@@ -69,16 +63,18 @@ func init() {
 		db.CreateTable(&RoutePrice{})
 		db.CreateTable(&Car{})
 		db.CreateTable(&Seat{})
-		db.CreateTable(&ScheduleTran{})
-		db.CreateTable(&ScheduleCar{})
-		db.CreateTable(&ScheduleSeat{})
+		// db.CreateTable(&ScheduleTran{})
+		// db.CreateTable(&ScheduleCar{})
+		// db.CreateTable(&ScheduleSeat{})
 		db.CreateTable(&Order{})
 		db.CreateTable(&User{})
-		db.CreateTable(&UserContact{})
+		db.CreateTable(&Contact{})
 	}
 
-	// initGoPool()
-	// initStation()
-	// initTranInfo()
-	// initTranScheduleMap()
+	initGoPool()
+	initStation()
+	initTranInfo()
+	initTranSchedule()
+
+	fmt.Println("init done...")
 }

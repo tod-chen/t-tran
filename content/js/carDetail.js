@@ -135,7 +135,11 @@ function save(){
         dataType:'json',
         data:JSON.stringify(carDetail),
         success:function(result){
-            console.log(result);
+            if (result.success){
+                toastr.success('保存成功');
+            } else {
+                toastr.error(result.msg);
+            }
         }
     })
 }

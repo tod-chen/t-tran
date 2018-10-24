@@ -90,3 +90,34 @@ function getParseFloat(str, def){
     }
     return num;
 }
+
+function padLeft(total, pad) {
+    return (Array(total).join(pad || 0) + this).slice(-total);
+}
+
+String.prototype.padLeft = padLeft;
+Number.prototype.padLeft = padLeft
+
+Date.prototype.format = function(format)
+{
+    var o = {
+        "M+" : this.getMonth()+1, //month
+        "d+" : this.getDate(),    //day
+        "h+" : this.getHours(),   //hour
+        "m+" : this.getMinutes(), //minute
+        "s+" : this.getSeconds(), //second
+        "q+" : Math.floor((this.getMonth()+3)/3),  //quarter
+        "S" : this.getMilliseconds() //millisecond
+    }
+    if (format == undefined || format == '') {
+        return this.getFullYear().padLeft(4) + '-' 
+            + (this.getMonth() + 1).padLeft(2) + '-' 
+            + this.getDate().padLeft(2);
+    }
+    if(/(y+)/.test(format)) 
+        format = format.replace(RegExp.$1, (this.getFullYear().padLeft(4)+"").substr(4 - RegExp.$1.length));
+    for(var k in o)
+        if(new RegExp("("+ k +")").test(format))
+            format = format.replace(RegExp.$1, RegExp.$1.length==1 ? o[k] : ("00"+ o[k]).substr((""+ o[k]).length));
+    return format;
+}

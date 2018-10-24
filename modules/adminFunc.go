@@ -1,7 +1,5 @@
 package modules
 
-import "fmt"
-
 // QueryTrans 查询列车信息
 func QueryTrans(tranNum, tranType string, page, pageSize int) (trans []TranInfo, count int) {
 	q := db.Table("tran_infos").Where("tran_num like ? and tran_num REGEXP ?", "%"+tranNum+"%", "^"+tranType).Count(&count)
@@ -37,7 +35,6 @@ func GetCarDetail(carID int) (c Car) {
 
 // QuerySchedule 查询排班信息
 func QuerySchedule(departureDate, tranNum string, page, pageSize int) (schedules []ScheduleTran, count int) {
-	fmt.Println("depDate:", departureDate, ", tranNum:", tranNum, ", page:", page, ", pageSize:", pageSize)
 	q := db.Table("schedule_trans").Where("departure_date = ? and tran_num like ?", departureDate, "%"+tranNum+"%").Count(&count)
 	q.Order("tran_num").Offset((page - 1) * pageSize).Limit(pageSize).Find(&schedules)
 	return
@@ -59,7 +56,7 @@ func QueryStations(stationName, cityName string, page, pageSize int) (stations [
 	return
 }
 
-// GetStationDetail 获取车站明显
+// GetStationDetail 获取车站明细
 func GetStationDetail(stationID int) (s Station) {
 	db.Where("id = ?", stationID).First(s)
 	return

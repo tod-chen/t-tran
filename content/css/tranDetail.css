@@ -19,3 +19,16 @@
     color: blueviolet;
     display: inline-flex;
 }
+
+.car-item{
+    width:48%;
+    margin: 5px 1%;
+    float: left;
+}
+
+.car-item input{
+    width: 16%;
+}
+.car-item i{
+    margin:8px 0 0 5px;
+}

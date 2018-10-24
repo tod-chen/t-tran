@@ -1,34 +1,79 @@
 package modules
 
 import (
-	"time"
+	"errors"
 )
 
-// User 用户
+// Passenger 乘客
+type Passenger struct {
+	Name           string // 姓名
+	IsMale         bool   // 性别
+	Area           string // 国家地区
+	PaperworkType  uint8  // 证件类型
+	PaperworkNum   string // 证件号码
+	PaperworkValid bool   // 证件是否有效
+	PassengerType  uint8  // 乘客类型
+	PhoneNum       string // 手机号
+	TelNum         string // 固话
+	Email          string // 邮箱
+	Addr           string // 地址
+	ZipCode        string // 邮编
+	DBModel
+}
+
+// User 注册用户
 type User struct {
-	UserName   string        `gorm:"type:nvarchar(50)"` //用户名
-	Password   string        `gorm:"type:varchar(50)"`  //密码
-	PhoneNum   string        `gorm:"type:varchar(15)"`  //手机号
-	EmailAddr  string        `gorm:"type:varchar(50)"`  //邮箱
-	ContactIds string        `gorm:"type:varchar(500)"` // 联系人ID，用英文逗号分隔
-	Contacts   []UserContact `gorm:"foreignkey:UserID"` // 联系人
-	DBModel
+	UserName string `gorm:"type:nvarchar(50)"` //用户名
+	Password string `gorm:"type:varchar(50)"`  //密码
+	PhoneNumValid bool      // 手机号是否有效
+	EmailValid    bool      // 邮箱是否有效
+	Contacts      []Contact `gorm:"foreignkey:UserID"` // 联系人
+	Passenger
 }
 
-// UserContact 常用联系人
-type UserContact struct {
-	UserID      uint      `gorm:"index:main"`       // 用户ID
-	ContactType string    `gorm:"type:varchar(10)"` // 联系人类型：成人、儿童
-	AddTime     time.Time `gorm:"type:datetime"`    // 联系人添加时间
-	DBModel
+// Register 注册
+func (u *User) Register() error {
+	count := 0
+	db.Model(&User{}).Where("(user_name = ? or (paperwork_num = ? and paperwork_type = ?)) and paperwork_valid = 1", u.UserName, u.PaperworkNum, u.PaperworkType).Count(&count)
+	if count != 0 {
+		return errors.New("用户名或证件信息已存在")
+	}
+	db.Create(u)
+	return nil
 }
 
-// Contact 用户库
+// ChangePwd 修改密码
+func (u *User) ChangePwd(newPwd string) error {
+	db.Model(u).Update("password", newPwd)
+	return nil
+}
+
+// Edit 修改个人信息
+func (u *User) Edit() error {
+	db.Save(u)
+	return nil
+}
+
+// Contact 常用联系人
 type Contact struct {
-	RealName      string
-	PaperworkType string `gorm:"index:q;type:nvarchar(10)"`
-	PaperworkNum  string `gorm:"index:q;type:varchar(50)"`
-	PhoneNum      string `gorm:"type:varchar(20)"`
-	ApproveStatus uint8
-	DBModel
+	UserID uint `gorm:"index:main"` // 用户ID
+	Passenger
+}
+
+// Add 添加联系人
+func (c *Contact) Add() error {
+	db.Create(c)
+	return nil
+}
+
+// Edit 修改联系人信息
+func (c *Contact) Edit() error {
+	db.Save(c)
+	return nil
+}
+
+// Remove 删除联系人
+func (c *Contact) Remove() error {
+	db.Delete(c)
+	return nil
 }

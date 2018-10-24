@@ -1,8 +1,8 @@
 package web
 
 import (
+	"t-tran/modules"
 	"time"
-	// "t-tran/modules"
 )
 
 const (
@@ -18,19 +18,19 @@ type queryTranResult struct {
 }
 
 // 查询车次及余票数
-// func queryTrans(depStationName, arrStationName string, depDate time.Time, isStudent bool)[]string{
-// 	return modules.QueryMatchTransInfo(depStationName, arrStationName, depDate, isStudent)
-// }
+func queryResidualTicketInfo(depStationName, arrStationName string, depDate time.Time, isStudent bool) []string {
+	return modules.QueryResidualTicketInfo(depStationName, arrStationName, depDate, isStudent)
+}
 
 // // 查询时刻表
-// func queryRoute(tranNum string)[]modules.QueryRouteResult {
-// 	return modules.QueryRoutetable(tranNum)
-// }
+func queryTimetable(tranNum string, date time.Time) []modules.TimetableResult {
+	return modules.QueryTimetable(tranNum, date)
+}
 
 // // 查询票价
-// func queryPrice(tranNum string, depIdx, arrIdx uint8) map[string]float32 {
-// 	return modules.QuerySeatPrice(tranNum, depIdx, arrIdx)
-// }
+func queryPrice(tranNum string, date time.Time, depIdx, arrIdx uint8) map[string]float32 {
+	return modules.QuerySeatPrice(tranNum, date, depIdx, arrIdx)
+}
 
 // 提交订单
 func submitOrder() {
@@ -66,52 +66,3 @@ func changeOrder() {
 func printTicket() {
 
 }
-
-// func queryTrans(departureStation, arrivalStation string, date time.Time, isAdult bool) []queryResult{
-// 	var result []queryResult
-// 	trans := []tran{}	// 所有车次
-// 	deps := strings.Split(departureStation, ",")
-// 	arrivals := strings.Split(arrivalStation , ",")
-// 	var wg sync.WaitGroup
-// 	var l sync.Mutex
-// 	for _, item := range trans{
-// 		if !isMatchTranType(&item, types){
-// 			continue
-// 		}
-// 		if depIndex, arrIndex, ok := isMatchStationAndTime(&item, deps, arrivals, date, departureStartTime, departureEndTime); ok{
-// 			wg.Add(1)
-// 			go func (t *tran, depIndex, arrIndex int){
-// 				defer wg.Done()
-// 				var data queryResult
-// 				data.tranNum = t.tranNum
-// 				data.tranType = t.tranType
-// 				data.departureTime = t.routeTimetable[depIndex].departureTime
-// 				data.arrivalTime = t.routeTimetable[arrIndex].arrivalTime
-// 				l.Lock()
-// 				result = append(result, data)
-// 				l.Unlock()
-// 			}(&item, depIndex, arrIndex)
-// 		}
-// 	}
-// 	wg.Wait()
-// 	return result
-// }
-
-// func isMatchTranType(t *tran, types []string) bool{
-// 	for _, item := range types{
-// 		if t.tranType == item{
-// 			return true
-// 		}
-// 	}
-// 	return false
-// }
-
-// func book(tranID, userID, contactID, depIndex, arrIndex int, isAdult bool, seatType string)(string, bool){
-// 	var t tran // 根据tranID获取车次
-// 	msg, ok := t.Book(tranID, depIndex, arrIndex, userID, contactID, isAdult, seatType)
-// 	return msg, ok
-// }
-
-// func pay(userID, payType int, payAccount string, price float32){
-
-// }

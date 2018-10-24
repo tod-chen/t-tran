@@ -1,3 +1,29 @@
 {{ template "header" }}
+{{ template "toastr" }}
+<script src="../content/js/scheduleDetail.js"></script>
+<input type="hidden" id="scheduleId">
 
-{{ template "footer"}}
+<div class="row p15">
+    <div class="form-group col-md-3">
+        <label class="control-label">发车日期</label>
+        <input class="form-control" type="text" id="dep-date" disabled="disabled" />
+    </div>
+    <div class="form-group col-md-3">
+        <label class="control-label">车次</label>
+        <input class="form-control" type="text" id="tran-num" disabled="disabled" />
+    </div>
+    <div class="form-group col-md-3">
+        <label class="control-label">售票时间</label>
+        <input class="form-control" type="datetime-local" id="sale-ticket-time" />
+    </div>
+    <div class="form-group col-md-3">
+        <label class="control-label">不售票说明</label>
+        <input class="form-control" type="text" id="not-sale-remark" />
+    </div>
+</div>
+<div class="tac">
+    <button class="btn btn-success" id="btn-save" ><i class="fa fa-save"></i>保存</button>
+    <button class="btn btn-secondary" id="btn-cancel" ><i class="fa fa-undo"></i>取消</button>
+</div>
+
+{{ template "footer" }}

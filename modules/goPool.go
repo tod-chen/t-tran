@@ -1,5 +1,9 @@
 package modules
 
+import (
+	"fmt"
+)
+
 const (
 	constMaxGoroutineCount = 5000
 )
@@ -8,8 +12,8 @@ const (
 var goPool *goRoutinePool
 
 func initGoPool() {
-	// fmt.Println("init goPool beginning")
-	// defer fmt.Println("init goPool end")
+	fmt.Println("init Go Pool begin")
+	defer fmt.Println("init Go Pool end")
 	goPool = &goRoutinePool{}
 	goPool.ch = make(chan byte, constMaxGoroutineCount)
 	for i := 0; i < constMaxGoroutineCount; i++ {

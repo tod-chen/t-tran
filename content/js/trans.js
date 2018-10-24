@@ -34,7 +34,7 @@ function query(){
             for(var i=0; result != null && i<result.trans.length; i++){
                 var t = result.trans[i];
                 var tranNumLink = '<a href="/trans/detail?tranId=' + t.id + '">' + t.tranNum + '</a>';
-                var timetable = getTimeTableTd(t.routeTimetable);                
+                var timetable = getTimeTableTd(t.timetable);                
                 var cars = '';
                 var level = t.enableLevel;
                 var start = new Date(t.enableStartDate).toLocaleDateString();
@@ -52,23 +52,23 @@ function query(){
     })
 }
 
-function getTimeTableTd(RouteTimetable){
+function getTimeTableTd(Timetable){
     var timetable = '';
     var routes = new Array();
-    var rLen = RouteTimetable.length;
+    var rLen = Timetable.length;
     var timetableTip = "<table class=\"table table-sm routeTable\"><thead><tr><th>序号</th><th>站名</th><th>到站时间</th><th>出发时间</th></tr></thead><tbody>";
     for(var j=0; j<rLen; j++){
-        var arrTime = getDateHm(RouteTimetable[j].arrTime);
-        var depTime = getDateHm(RouteTimetable[j].depTime);
+        var arrTime = getDateHm(Timetable[j].arrTime);
+        var depTime = getDateHm(Timetable[j].depTime);
         if (j == 0){
             arrTime = '--';
-            timetable += RouteTimetable[j].stationName + ' --> ';
+            timetable += Timetable[j].stationName + ' --> ';
         }
         if (j == rLen - 1){
             depTime = '--';
-            timetable += RouteTimetable[j].stationName;
+            timetable += Timetable[j].stationName;
         }
-        timetableTip += '<tr><td>' + (j+1) + '</td><td>' + RouteTimetable[j].stationName + '</td><td>' + arrTime+ '</td><td>' +depTime+ '</td></tr>';
+        timetableTip += '<tr><td>' + (j+1) + '</td><td>' + Timetable[j].stationName + '</td><td>' + arrTime+ '</td><td>' +depTime+ '</td></tr>';
     }
     timetableTip += '</tbody></table>';
     return "<a href='#' title='' data-toggle='popover' data-trigger='focus' data-content='"+timetableTip+"'>"+timetable+"</a>";
