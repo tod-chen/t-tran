@@ -59,9 +59,10 @@ func initTranInfos() {
 	defer fmt.Println("init Tran Info end")
 	today := time.Now().Format(constYmdFormat)
 	lastDate := time.Now().AddDate(0, 0, constDays).Format(constYmdFormat)
-	db.Where("enable_start_date <= ? and ? <= enable_end_date", today, lastDate).Order("tran_num").Find(&tranInfos)
+	db.Where("enable_start_date <= ? and ? <= enable_end_date", today, lastDate).Order("tran_num, is_high_priority").Find(&tranInfos)
 	for i := 0; i < len(tranInfos); i++ {
 		fmt.Println("init tran info count: ", i)
+		// TODO:
 		tranInfos[i].getFullInfo()
 	}
 	sort.Stable(trans(tranInfos))
@@ -94,23 +95,21 @@ func getTranInfo(tranNum string, date time.Time) *TranInfo {
 	return &tranInfos[idx]
 }
 
-// TranInfo 列车信息结构体
+// TranInfo 列车信息结构体 ===============================start
 type TranInfo struct {
-	TranNum      string `gorm:"index:main;type:varchar(10)" json:"tranNum"` // 车次号
-	DurationDays uint8  `json:"durationDays"`                               // 一趟行程运行多少天，次日达则值应为2
-	ScheduleDays uint8  `gorm:"default:1" json:"scheduleDays"`              // 间隔多少天发一趟车，绝大多数是1天
-	EnableLevel  uint8  `gorm:"default:1" json:"enableLevel"`               // 生效级别 0为最高级别，默认级别为1
-	CarIds       string `gorm:"type:varchar(100)" json:"carIds"`            // 车厢ID及其数量，格式如：32:1;12:2; ...
+	TranNum        string `gorm:"index:main;type:varchar(10)" json:"tranNum"` // 车次号
+	DurationDays   uint8  `json:"durationDays"`                               // 一趟行程运行多少天，次日达则值应为2
+	ScheduleDays   uint8  `gorm:"default:1" json:"scheduleDays"`              // 间隔多少天发一趟车，绝大多数是1天
+	IsHighPriority bool   `gorm:"default:0" json:"isHighPriority"`            // 是否优先级较高，用于相同车次两个时间冲突时优先已哪个为准
+	IsSaleTicket   bool   `gorm:"default:1"`                                  // 是否售票
+	NonSaleRemark  string `gorm:"type:varchar(100)"`                          // 不售票说明
 	// 生效开始日期 默认零值
-	EnableStartDate time.Time `gorm:"type:datetime;default:'0000-00-00 00:00:00'" json:"enableStartDate"`
+	EnableStartDate time.Time `gorm:"index:query;type:datetime;default:'0000-00-00 00:00:00'" json:"enableStartDate"`
 	// 生效截止日期 默认最大值
-	EnableEndDate time.Time `gorm:"type:datetime;default:'9999-12-31 23:59:59'" json:"enableEndDate"`
-	// 车厢
-	Cars []Car `gorm:"-"`
-	// 时刻表
-	Timetable []Route `gorm:"-" json:"timetable"`
-	// 各类席位在各路段的价格
-	SeatPriceMap map[string]([]float32) `gorm:"-" json:"seatPriceMap"`
+	EnableEndDate time.Time `gorm:"index:query;type:datetime;default:'9999-12-31 23:59:59'" json:"enableEndDate"`
+	CarIds       string                 `gorm:"type:varchar(100)" json:"carIds"` // 车厢ID及其数量，格式如：32:1;12:2; ...
+	Timetable    []Route                `gorm:"-" json:"timetable"`              // 时刻表
+	SeatPriceMap map[string]([]float32) `gorm:"-" json:"seatPriceMap"`           // 各类席位在各路段的价格
 	DBModel
 }
 
@@ -140,7 +139,9 @@ func (t *TranInfo) getFullInfo() {
 			start = end
 		}
 	}
+}
 
+func (t *TranInfo) getScheduleCars() []*ScheduleCar {
 	// 获取车厢信息
 	carSettings, carCount := strings.Split(t.CarIds, ";"), 0
 	carIds, carIDCountMap := make([]int, len(carSettings)), make(map[int]int, len(carSettings))
@@ -154,18 +155,26 @@ func (t *TranInfo) getFullInfo() {
 			carCount += count
 		}
 	}
+	result := make([]*ScheduleCar, 0, carCount)
 	var cars []Car
 	db.Where("id in (?)", carIds).Find(&cars)
-	t.Cars = make([]Car, 0, carCount)
 	// 根据车厢配置，组装车厢
 	for idx := 0; idx < len(cars); idx++ {
 		var seats []Seat
 		db.Where("car_id = ?", cars[idx].ID).Find(&seats)
 		cars[idx].Seats = seats
 		for i := 0; i < carIDCountMap[int(cars[idx].ID)]; i++ {
-			t.Cars = append(t.Cars, cars[idx])
+			sc := ScheduleCar{
+				SeatType : cars[idx].SeatType,
+				CarNum: uint8(len(result)) + 1,
+				NoSeatCount: cars[idx].NoSeatCount,
+				Seats: make([]ScheduleSeat, len(cars[idx].Seats)),
+				EachRouteTravelerCount: make([]uint8, len(t.Timetable) - 1),
+			}
+			result = append(result, &sc)
 		}
 	}
+	return result
 }
 
 // Save 保存到数据库
@@ -337,7 +346,7 @@ type Car struct {
 	SeatCount   uint8  // 车厢内座位数(或床位数)
 	NoSeatCount uint8  `json:"noSeatCount"`                     // 车厢内站票数
 	Remark      string `gorm:"type:nvarchar(50)" json:"remark"` // 说明
-	Seats       []Seat `gorm:"foreignkey:CarID" json:"seats"`   // 车厢的所有座位
+	Seats       []Seat `json:"seats"`   // 车厢的所有座位
 	DBModel
 }
 

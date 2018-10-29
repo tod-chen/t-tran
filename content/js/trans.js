@@ -36,7 +36,7 @@ function query(){
                 var tranNumLink = '<a href="/trans/detail?tranId=' + t.id + '">' + t.tranNum + '</a>';
                 var timetable = getTimeTableTd(t.timetable);                
                 var cars = '';
-                var level = t.enableLevel;
+                var level = t.isHighPriority;
                 var start = new Date(t.enableStartDate).toLocaleDateString();
                 var end = new Date(t.enableEndDate).toLocaleDateString();
                 var tr = '<tr><td>'+tranNumLink+'</td><td>'+timetable+'</td><td>'+cars+'</td><td>'+level

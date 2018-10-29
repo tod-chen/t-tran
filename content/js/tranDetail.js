@@ -3,7 +3,7 @@ var tag = {
     tranNum: '#tranNum',
     durationDay:'#durationDay',
     scheduleDay:'#scheduleDay',
-    enableLevel:'#enableLevel',
+    isHighPriority:'#isHighPriority',
     enableSD:'#enableSD',
     enableED:'#enableED',
     timetableTab:'#timetable-tab',
@@ -46,7 +46,7 @@ function initData(){
             $(tag.tranNum).val(t.tranNum);
             $(tag.durationDay).val(t.durationDays);
             $(tag.scheduleDay).val(t.scheduleDays);
-            $(tag.enableLevel).val(t.enableLevel);
+            $(tag.isHighPriority).val(t.isHighPriority);
             $(tag.enableSD).val(t.enableStartDate.split('T')[0]);
             $(tag.enableED).val(t.enableEndDate.split('T')[0]);
             // 设置车厢
@@ -231,7 +231,7 @@ function validData(){
         tranNum:$(tag.tranNum).val(),
         durationDay:parseInt($(tag.durationDay).val()),
         scheduleDay:parseInt($(tag.scheduleDay).val()),
-        enableLevel:parseInt($(tag.enableLevel).val()),
+        isHighPriority:parseInt($(tag.isHighPriority).val()),
         enableStartDate: new Date($(tag.enableSD).val()).toISOString(),
         enableEndDate: new Date($(tag.enableED).val()).toISOString(),
         timetable: new Array(),

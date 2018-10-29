@@ -1,13 +1,14 @@
 package modules
 
 import (
-	"gopkg.in/mgo.v2/bson"
 	"fmt"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"gopkg.in/mgo.v2/bson"
 )
 
 const (
@@ -59,7 +60,7 @@ func initScheduleByDate(date time.Time, t *TranInfo) {
 			panic(err)
 		}
 	} else {
-		
+
 	}
 	q := db.Table("schedule_trans").Where("departure_date = ? and tran_num = ?", strDate, t.TranNum)
 	q.Count(&count)
@@ -285,14 +286,14 @@ func (st *ScheduleTran) GetSeatCount(depIdx, arrIdx uint8, isStudent bool) (resu
 
 // ScheduleCar 排班中的车厢
 type ScheduleCar struct {
-	ScheduleTranID            uint64         // 车次排班ID
-	SeatType                  string         // 座次
-	CarNum                    uint8          // 车厢号
-	NoSeatCount               uint8          // 车厢内站票数
-	Seats                     []ScheduleSeat `gorm:"foreignkey:CarID"` // 车厢的所有座位
-	EachRouteTravelerCountStr string         // 各路段乘客人数，用英文逗号分隔存于数据库
+	ScheduleTranID uint64         // 车次排班ID
+	SeatType       string         // 座次
+	CarNum         uint8          // 车厢号
+	NoSeatCount    uint8          // 车厢内站票数
+	Seats          []ScheduleSeat // 车厢的所有座位
+	//EachRouteTravelerCountStr string         // 各路段乘客人数，用英文逗号分隔存于数据库
 	// 各路段乘客人数，用于计算可拼凑的站票数，仅在有站票的车厢使用
-	EachRouteTravelerCount []uint8 `gorm:"-"`
+	EachRouteTravelerCount []uint8 //`gorm:"-"`
 	sync.RWMutex                   // 读写锁，用于保护各路段乘客人数字段
 	DBModel
 }
