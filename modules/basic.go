@@ -35,37 +35,40 @@ const (
 )
 
 var (
+	// 所有车厢，存于内存，便于组装
+	carMap map[int](Car)
 	// 所有车次信息，不参与订票，用于查询列车的时刻表和各路段各座次的价格
 	tranInfos []TranInfo
 	// 各城市与经过该城市的列车映射
 	cityTranMap map[string]([]*TranInfo)
 )
 
-type trans []TranInfo
-
-func (t trans) Len() int      { return len(t) }
-func (t trans) Swap(i, j int) { t[i], t[j] = t[j], t[i] }
-func (t trans) Less(i, j int) bool {
-	return t[i].TranNum <= t[j].TranNum && t[i].EnableStartDate.Before(t[j].EnableStartDate)
-}
-
 func initTranInfo() {
+	initCarMap()
 	initTranInfos()
 	initCityTranMap()
+}
+
+func initCarMap() {
+	fmt.Println("init car map begin")
+	defer fmt.Println("init car map end")
+	var cars []Car
+	db.Find(&cars)
+	fmt.Println("cars count:", len(cars))
+	for i:=0;i<len(cars);i++{
+		db.Where("car_id = ?", cars[i].ID).Find(&cars[i].Seats)
+	}
 }
 
 func initTranInfos() {
 	fmt.Println("init Tran Info begin")
 	defer fmt.Println("init Tran Info end")
-	today := time.Now().Format(constYmdFormat)
-	lastDate := time.Now().AddDate(0, 0, constDays).Format(constYmdFormat)
-	db.Where("enable_start_date <= ? and ? <= enable_end_date", today, lastDate).Order("tran_num, is_high_priority").Find(&tranInfos)
+	now, lastDay := time.Now(), time.Now().AddDate(0, 0, constDays)
+	today, lastDate := now.Format(constYmdFormat), lastDay.Format(constYmdFormat)
+	db.Where("enable_end_date >= ? and ? >= enable_start_date", today, lastDate).Order("tran_num, enable_start_date").Find(&tranInfos)
 	for i := 0; i < len(tranInfos); i++ {
-		fmt.Println("init tran info count: ", i)
-		// TODO:
 		tranInfos[i].getFullInfo()
 	}
-	sort.Stable(trans(tranInfos))
 }
 
 func initCityTranMap() {
@@ -106,10 +109,10 @@ type TranInfo struct {
 	// 生效开始日期 默认零值
 	EnableStartDate time.Time `gorm:"index:query;type:datetime;default:'0000-00-00 00:00:00'" json:"enableStartDate"`
 	// 生效截止日期 默认最大值
-	EnableEndDate time.Time `gorm:"index:query;type:datetime;default:'9999-12-31 23:59:59'" json:"enableEndDate"`
-	CarIds       string                 `gorm:"type:varchar(100)" json:"carIds"` // 车厢ID及其数量，格式如：32:1;12:2; ...
-	Timetable    []Route                `gorm:"-" json:"timetable"`              // 时刻表
-	SeatPriceMap map[string]([]float32) `gorm:"-" json:"seatPriceMap"`           // 各类席位在各路段的价格
+	EnableEndDate time.Time              `gorm:"index:query;type:datetime;default:'9999-12-31 23:59:59'" json:"enableEndDate"`
+	CarIds        string                 `gorm:"type:varchar(100)" json:"carIds"` // 车厢ID及其数量，格式如：32:1;12:2; ...
+	Timetable     []Route                `gorm:"-" json:"timetable"`              // 时刻表
+	SeatPriceMap  map[string]([]float32) `gorm:"-" json:"seatPriceMap"`           // 各类席位在各路段的价格
 	DBModel
 }
 
@@ -141,7 +144,7 @@ func (t *TranInfo) getFullInfo() {
 	}
 }
 
-func (t *TranInfo) getScheduleCars() []*ScheduleCar {
+func (t *TranInfo) getScheduleCars() *[]ScheduleCar {
 	// 获取车厢信息
 	carSettings, carCount := strings.Split(t.CarIds, ";"), 0
 	carIds, carIDCountMap := make([]int, len(carSettings)), make(map[int]int, len(carSettings))
@@ -155,7 +158,8 @@ func (t *TranInfo) getScheduleCars() []*ScheduleCar {
 			carCount += count
 		}
 	}
-	result := make([]*ScheduleCar, 0, carCount)
+	result := make([]ScheduleCar, carCount)
+	carIdx := 0
 	var cars []Car
 	db.Where("id in (?)", carIds).Find(&cars)
 	// 根据车厢配置，组装车厢
@@ -163,18 +167,18 @@ func (t *TranInfo) getScheduleCars() []*ScheduleCar {
 		var seats []Seat
 		db.Where("car_id = ?", cars[idx].ID).Find(&seats)
 		cars[idx].Seats = seats
-		for i := 0; i < carIDCountMap[int(cars[idx].ID)]; i++ {
-			sc := ScheduleCar{
-				SeatType : cars[idx].SeatType,
-				CarNum: uint8(len(result)) + 1,
+		for i := 0; i < carIDCountMap[int(cars[idx].ID)]; i++ {			
+			result[carIdx] = ScheduleCar{
+				SeatType:    cars[idx].SeatType,
+				CarNum:      uint8(len(result)) + 1,
 				NoSeatCount: cars[idx].NoSeatCount,
-				Seats: make([]ScheduleSeat, len(cars[idx].Seats)),
-				EachRouteTravelerCount: make([]uint8, len(t.Timetable) - 1),
+				Seats:       make([]ScheduleSeat, len(cars[idx].Seats)),
+				EachRouteTravelerCount: make([]uint8, len(t.Timetable)-1),
 			}
-			result = append(result, &sc)
+			carIdx++
 		}
 	}
-	return result
+	return &result
 }
 
 // Save 保存到数据库
@@ -346,7 +350,7 @@ type Car struct {
 	SeatCount   uint8  // 车厢内座位数(或床位数)
 	NoSeatCount uint8  `json:"noSeatCount"`                     // 车厢内站票数
 	Remark      string `gorm:"type:nvarchar(50)" json:"remark"` // 说明
-	Seats       []Seat `json:"seats"`   // 车厢的所有座位
+	Seats       []Seat `json:"seats"`                           // 车厢的所有座位
 	DBModel
 }
 

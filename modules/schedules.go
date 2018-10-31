@@ -62,8 +62,8 @@ func initScheduleByDate(date time.Time, t *TranInfo) {
 	} else {
 
 	}
-	q := db.Table("schedule_trans").Where("departure_date = ? and tran_num = ?", strDate, t.TranNum)
-	q.Count(&count)
+	// q := db.Table("schedule_trans").Where("departure_date = ? and tran_num = ?", strDate, t.TranNum)
+	// q.Count(&count)
 	if count == 0 {
 		// tranList 中相同的车次已经按 EnalbeLevel 排序好了，优先排等级较高的一个
 		sTran = ScheduleTran{DepartureDate: strDate, TranNum: t.TranNum}
@@ -81,7 +81,7 @@ func initScheduleByDate(date time.Time, t *TranInfo) {
 			initScheduleTran(&sTran, t, false)
 		}
 	} else {
-		q.First(&sTran)
+		//q.First(&sTran)
 		initScheduleTran(&sTran, t, true)
 	}
 	trans := scheduleTranMap[strDate]
@@ -94,35 +94,36 @@ func initScheduleTran(st *ScheduleTran, t *TranInfo, exist bool) {
 	st.FullSeatBit = countSeatBit(0, routeCount)
 	if !exist {
 		db.Create(st)
-		scheduleCars := make([]ScheduleCar, len(t.Cars))
-		for i := 0; i < len(t.Cars); i++ {
-			scheduleCars[i] = ScheduleCar{
-				ScheduleTranID: st.ID,
-				SeatType:       t.Cars[i].SeatType,
-				CarNum:         uint8(i + 1),
-				NoSeatCount:    t.Cars[i].NoSeatCount,
-			}
-			// 站票数不为零，才初始化EachRouteTravelerCount
-			if t.Cars[i].NoSeatCount != 0 {
-				tempStrArr := make([]string, routeCount)
-				for j := 0; j < len(tempStrArr); j++ {
-					tempStrArr[j] = "0"
-				}
-				scheduleCars[i].EachRouteTravelerCount = make([]uint8, routeCount)
-				scheduleCars[i].EachRouteTravelerCountStr = strings.Join(tempStrArr, ",")
-			}
-			db.Create(&scheduleCars[i])
-			var seats []Seat
-			db.Where("car_id = ?", t.Cars[i].ID).Order("seat_num").Find(&seats)
-			scheduleSeats := make([]ScheduleSeat, len(seats))
-			for j := 0; j < len(seats); j++ {
-				scheduleSeats[j].CarID = scheduleCars[i].ID
-				scheduleSeats[j].SeatNum = seats[j].SeatNum
-				scheduleSeats[j].IsStudent = seats[j].IsStudent
-				db.Create(&scheduleSeats[j])
-			}
-			scheduleCars[i].Seats = scheduleSeats
-		}
+		st.Cars = *t.getScheduleCars()
+		// scheduleCars :=  make([]ScheduleCar, len(t.Cars))
+		// for i := 0; i < len(t.Cars); i++ {
+		// 	scheduleCars[i] = ScheduleCar{
+		// 		ScheduleTranID: st.ID,
+		// 		SeatType:       t.Cars[i].SeatType,
+		// 		CarNum:         uint8(i + 1),
+		// 		NoSeatCount:    t.Cars[i].NoSeatCount,
+		// 	}
+		// 	// 站票数不为零，才初始化EachRouteTravelerCount
+		// 	if t.Cars[i].NoSeatCount != 0 {
+		// 		tempStrArr := make([]string, routeCount)
+		// 		for j := 0; j < len(tempStrArr); j++ {
+		// 			tempStrArr[j] = "0"
+		// 		}
+		// 		scheduleCars[i].EachRouteTravelerCount = make([]uint8, routeCount)
+		// 		scheduleCars[i].EachRouteTravelerCountStr = strings.Join(tempStrArr, ",")
+		// 	}
+		// 	db.Create(&scheduleCars[i])
+		// 	var seats []Seat
+		// 	db.Where("car_id = ?", t.Cars[i].ID).Order("seat_num").Find(&seats)
+		// 	scheduleSeats := make([]ScheduleSeat, len(seats))
+		// 	for j := 0; j < len(seats); j++ {
+		// 		scheduleSeats[j].CarID = scheduleCars[i].ID
+		// 		scheduleSeats[j].SeatNum = seats[j].SeatNum
+		// 		scheduleSeats[j].IsStudent = seats[j].IsStudent
+		// 		db.Create(&scheduleSeats[j])
+		// 	}
+		// 	scheduleCars[i].Seats = scheduleSeats
+		// }
 	} else {
 		db.Save(st)
 		var cars []ScheduleCar
@@ -130,12 +131,12 @@ func initScheduleTran(st *ScheduleTran, t *TranInfo, exist bool) {
 		st.Cars = cars
 		for i := 0; i < len(st.Cars); i++ {
 			if st.Cars[i].NoSeatCount != 0 {
-				tempStrArr := strings.Split(st.Cars[i].EachRouteTravelerCountStr, ",")
-				st.Cars[i].EachRouteTravelerCount = make([]uint8, len(tempStrArr))
-				for j := 0; j < len(tempStrArr); j++ {
-					count, _ := strconv.Atoi(tempStrArr[j])
-					st.Cars[i].EachRouteTravelerCount[j] = uint8(count)
-				}
+				//tempStrArr := strings.Split(st.Cars[i].EachRouteTravelerCountStr, ",")
+				// st.Cars[i].EachRouteTravelerCount = make([]uint8, len(tempStrArr))
+				// for j := 0; j < len(tempStrArr); j++ {
+				// 	count, _ := strconv.Atoi(tempStrArr[j])
+				// 	st.Cars[i].EachRouteTravelerCount[j] = uint8(count)
+				// }
 			}
 			var seats []ScheduleSeat
 			db.Where("car_id = ?", st.Cars[i].ID).Order("seat_num").Find(&seats)
