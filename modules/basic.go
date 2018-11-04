@@ -46,7 +46,7 @@ var (
 func initTranInfo() {
 	initCarMap()
 	initTranInfos()
-	initCityTranMap()
+	//initCityTranMap()
 }
 
 func initCarMap() {
@@ -54,7 +54,7 @@ func initCarMap() {
 	defer fmt.Println("init car map end")
 	var cars []Car
 	db.Find(&cars)
-	fmt.Println("cars count:", len(cars))
+	carMap = make(map[int](Car), len(cars))
 	for i := 0; i < len(cars); i++ {
 		db.Where("car_id = ?", cars[i].ID).Find(&cars[i].Seats)
 		carMap[cars[i].ID] = cars[i]
@@ -63,11 +63,12 @@ func initCarMap() {
 func initTranInfos() {
 	fmt.Println("init Tran Info begin")
 	defer fmt.Println("init Tran Info end")
-	now, lastDay := time.Now(), time.Now().AddDate(0, 0, constDays)
-	today, lastDate := now.Format(constYmdFormat), lastDay.Format(constYmdFormat)
-	db.Where("enable_end_date >= ? and ? >= enable_start_date", today, lastDate).Order("tran_num, enable_start_date").Find(&tranInfos)
+	db.Where("id = ?", 1).Find(&tranInfos)
+	// now, lastDay := time.Now(), time.Now().AddDate(0, 0, constDays)
+	// today, lastDate := now.Format(constYmdFormat), lastDay.Format(constYmdFormat)
+	// db.Where("enable_end_date >= ? and ? >= enable_start_date", today, lastDate).Order("tran_num, enable_start_date").Find(&tranInfos)
 	for i := 0; i < len(tranInfos); i++ {
-		tranInfos[i].getFullInfo()
+		//tranInfos[i].getFullInfo()
 	}
 }
 func initCityTranMap() {
@@ -95,7 +96,7 @@ func getTranInfo(tranNum string, date time.Time) *TranInfo {
 	})
 	return &tranInfos[idx]
 }
-func getViaTrans(depS, arrS *Station) (result []*TranInfo){
+func getViaTrans(depS, arrS *Station) (result []*TranInfo) {
 	// 获取经过出发站所在城市的所有车次
 	depTrans, exist := cityTranMap[depS.CityCode]
 	if !exist {
@@ -103,20 +104,20 @@ func getViaTrans(depS, arrS *Station) (result []*TranInfo){
 	}
 	// 获取经过目的站所在城市的所有车次
 	arrTrans, exist := cityTranMap[arrS.CityCode]
-	if !exist{
+	if !exist {
 		return
 	}
-	if len(arrTrans) < len(depTrans){
+	if len(arrTrans) < len(depTrans) {
 		arrTrans, depTrans = depTrans, arrTrans
 	}
 	// 用map取经过出发站城市车次和目的站城市车次的交集
 	m := make(map[string](bool), len(depTrans))
-	for _, t := range depTrans{
-		m[t.TranNum + t.EnableStartDate.Format(constYmdFormat)] = false
+	for _, t := range depTrans {
+		m[t.TranNum+t.EnableStartDate.Format(constYmdFormat)] = false
 	}
-	for idx, t := range arrTrans{
+	for idx, t := range arrTrans {
 		// 属于交集，则放置结果集中
-		if _, ok := m[t.TranNum + t.EnableStartDate.Format(constYmdFormat)]; ok {
+		if _, ok := m[t.TranNum+t.EnableStartDate.Format(constYmdFormat)]; ok {
 			result = append(result, arrTrans[idx])
 		}
 	}
@@ -125,12 +126,13 @@ func getViaTrans(depS, arrS *Station) (result []*TranInfo){
 
 // TranInfo 列车信息结构体 ===============================start
 type TranInfo struct {
+	ID                   int
 	TranNum              string    `gorm:"index:main;type:varchar(10)" json:"tranNum"` // 车次号
 	RouteDepDurationDays int       `json:"durationDays"`                               // 路段出发间隔天数：最后一个路段的发车时间与起点站发车时间的间隔天数
 	ScheduleDays         int       `gorm:"default:1" json:"scheduleDays"`              // 间隔多少天发一趟车，绝大多数是1天
-	IsSaleTicket         bool      `gorm:"default:1"`                                  // 是否售票
-	SaleTicketTime       time.Time // 售票时间，不需要日期部分，只取时间部分
-	NonSaleRemark        string    `gorm:"type:varchar(100)"` // 不售票说明
+	IsSaleTicket         bool      `json:"isSaleTicket"`                               // 是否售票
+	SaleTicketTime       time.Time `json:"saleTicketTime"`                             // 售票时间，不需要日期部分，只取时间部分
+	NonSaleRemark        string    `gorm:"type:varchar(100)" json:"nonSaleRemark"`     // 不售票说明
 	// 生效开始日期 默认零值
 	EnableStartDate time.Time `gorm:"index:query;type:datetime;default:'0000-00-00 00:00:00'" json:"enableStartDate"`
 	// 生效截止日期 默认最大值
@@ -138,7 +140,6 @@ type TranInfo struct {
 	CarIds        string                 `gorm:"type:varchar(100)" json:"carIds"` // 车厢ID及其数量，格式如：32:1;12:2; ...
 	Timetable     []Route                `gorm:"-" json:"timetable"`              // 时刻表
 	SeatPriceMap  map[string]([]float32) `gorm:"-" json:"seatPriceMap"`           // 各类席位在各路段的价格
-	DBModel
 }
 
 // 是否为城际车次，城际车次在同一个城市内可能会有多个站，情况相对特殊
@@ -147,9 +148,9 @@ func (t *TranInfo) isIntercity() bool {
 }
 func (t *TranInfo) getFullInfo() {
 	// 获取时刻表信息
-	var routes []Route
-	db.Where("tran_id = ?", t.ID).Order("station_index").Find(&routes)
-	t.Timetable = routes
+	db.Where("tran_id = ?", t.ID).Order("station_index").Find(&t.Timetable)
+	t.RouteDepDurationDays = t.Timetable[len(t.Timetable)-1].DepTime.YearDay() - 1
+	db.Model(t).Update("route_dep_duration_days", t.RouteDepDurationDays)
 
 	// 获取各席别在各路段的价格，大多数车次只有三类席别（无座不考虑）
 	t.SeatPriceMap = make(map[string]([]float32), 3)
@@ -184,7 +185,7 @@ func (t *TranInfo) getScheduleCars() (sCars *[]ScheduleCar) {
 	result, carIdx := make([]ScheduleCar, carCount), uint8(0)
 	for id, count := range carIDCountMap {
 		c := carMap[id]
-		for i:=0; i< count;i++{
+		for i := 0; i < count; i++ {
 			result[carIdx] = ScheduleCar{
 				SeatType:    c.SeatType,
 				CarNum:      uint8(len(result)) + 1,
@@ -192,7 +193,7 @@ func (t *TranInfo) getScheduleCars() (sCars *[]ScheduleCar) {
 				Seats:       make([]ScheduleSeat, len(c.Seats)),
 				EachRouteTravelerCount: make([]uint8, len(t.Timetable)-1),
 			}
-			for si :=0; si<len(c.Seats);si++{
+			for si := 0; si < len(c.Seats); si++ {
 				result[carIdx].Seats[si].SeatNum = c.Seats[si].SeatNum
 				result[carIdx].Seats[si].IsStudent = c.Seats[si].IsStudent
 			}
@@ -318,7 +319,7 @@ func (t *TranInfo) IsMatchQuery(depS, arrS *Station, queryDate time.Time) (depId
 
 // Route 时刻表信息
 type Route struct {
-	TranID          uint64  // 车次ID
+	TranID          int     // 车次ID
 	TranNum         string  `gorm:"index:main;type:varchar(10)"` // 车次号
 	StationIndex    uint8   // 车站索引
 	StationName     string  `gorm:"type:nvarchar(20)" json:"stationName"`    // 车站名
@@ -357,7 +358,7 @@ func (r *Route) getStrStayTime() string {
 
 // RoutePrice 各路段价格
 type RoutePrice struct {
-	TranID     uint64  `gorm:"index:main"`      // 车次ID
+	TranID     int     `gorm:"index:main"`      // 车次ID
 	SeatType   string  `gorm:"type:varchar(5)"` // 座次类型
 	RouteIndex uint8   // 路段索引
 	Price      float32 // 价格

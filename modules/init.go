@@ -74,7 +74,7 @@ func init() {
 	initGoPool()
 	initStation()
 	initTranInfo()
-	initTranSchedule()
+	//initTranSchedule()
 
 	fmt.Println("init done...")
 }

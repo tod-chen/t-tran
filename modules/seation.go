@@ -9,7 +9,6 @@ func initStation() {
 	fmt.Println("init stations beginning")
 	defer fmt.Println("init stations end")
 	db.Where("is_passenger = 1").Find(&stations)
-	fmt.Println("stations count:", len(stations))
 }
 
 // Station 车站信息
