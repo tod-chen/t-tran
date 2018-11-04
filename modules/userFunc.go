@@ -1,44 +1,32 @@
 package modules
 
 import (
-	"sort"
 	"time"
 )
 
 // QueryResidualTicketInfo 获取所选出发日期中， 经过出发站、目的站的车次及其各类余票数量
 func QueryResidualTicketInfo(depStationName, arrStationName string, queryDate time.Time, isStudent bool) (result []string) {
-	depS := getStationInfoByName(depStationName)
-	depTrans, exist := cityTranMap[depS.CityCode]
-	if !exist {
-		return
-	}
-	arrS := getStationInfoByName(arrStationName)
-	resultCh := make(chan *ResidualTicketInfo, 20)
-	defer close(resultCh)
-	matchTranCount := 0
-	for i := 0; i < len(depTrans); i++ {
-		depIdx, arrIdx, depDate, ok := depTrans[i].IsMatchQuery(depS, arrS, queryDate)
+	depS, arrS := getStationInfoByName(depStationName), getStationInfoByName(arrStationName)
+	matchTrans := getViaTrans(depS, arrS)
+	resultCh, count := make(chan *ResidualTicketInfo, 20), 0
+	for i := 0; i < len(matchTrans); i++ {
+		depIdx, arrIdx, depDate, ok := matchTrans[i].IsMatchQuery(depS, arrS, queryDate)
 		if !ok {
 			continue
 		}
-		matchTranCount++
-		go func(ti *TranInfo, depIdx, arrIdx uint8, date string) {
-			rti := newResidualTicketInfo(ti, depIdx, arrIdx)
-			tran := getScheduleTran(ti.TranNum, date)
+		count++
+		go func(t *TranInfo, depIdx, arrIdx uint8, date string) {
+			rti := newResidualTicketInfo(t, depIdx, arrIdx)
+			tran := getScheduleTran(t.TranNum, date)
 			rti.setScheduleInfo(tran, isStudent)
 			resultCh <- rti
-		}(depTrans[i], depIdx, arrIdx, depDate)
+		}(matchTrans[i], depIdx, arrIdx, depDate)
 	}
-	resultList := make([]*ResidualTicketInfo, matchTranCount)
-	for i := 0; i < matchTranCount; i++ {
-		resultList[i] = <-resultCh
+	result = make([]string, count)
+	for i := 0; i < count; i++ {
+		result[i] = (<-resultCh).toString()
 	}
-	// 按发车时间排序
-	sort.Sort(residualTicketSort(resultList))
-	result = make([]string, matchTranCount)
-	for i := 0; i < len(resultList); i++ {
-		result[i] = resultList[i].toString()
-	}
+	close(resultCh)
 	return
 }
 

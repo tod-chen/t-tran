@@ -19,9 +19,28 @@ const (
 )
 
 var (
+	// 座次类型及前端显示序号关系
+	seatTypeIdxMap = map[string](int){
+		constSeatTypeSpecial:             0,
+		constSeatTypeFristClass:          1,
+		constSeatTypeSecondClass:         2,
+		constSeatTypeAdvancedSoftSleeper: 3,
+		constSeatTypeSoftSleeper:         4,
+		constSeatTypeEMUSleeper:          5,
+		constSeatTypeMoveSleeper:         6,
+		constSeatTypeHardSleeper:         7,
+		constSeatTypeSoftSeat:            8,
+		constSeatTypeHardSeat:            9,
+	}
 	// 列车按日期安排表
 	scheduleTranMap map[string]([]ScheduleTran)
 )
+
+func isSameDay(src, tar time.Time) bool {
+	sy, sm, sd := src.Date()
+	ty, tm, td := tar.Date()
+	return sy == ty && sm == tm && sd == td
+}
 
 // 初始化列车排班
 func initTranSchedule() {
@@ -30,127 +49,82 @@ func initTranSchedule() {
 
 	scheduleTranMap = make(map[string]([]ScheduleTran), constDays)
 	now := time.Now()
+	y, m, d := now.Date()
+	today := time.Date(y, m, d, 0, 0, 0, 0, time.Local)
 	for i := 0; i < len(tranInfos); i++ {
 		fmt.Println("init schedule tran count: ", i)
-		//fmt.Println("init schedule tran: ", tranInfos[i].TranNum)
-		// 可提前30天订票，但是要准备好40天的排班，留给后台操作的时间为不可订票的10天
-		for d := 0; d < constDays+10; d++ {
-			initScheduleByDate(now.AddDate(0, 0, d), &tranInfos[i])
+		if !tranInfos[i].IsSaleTicket {
+			continue
 		}
-		// 对于全程运行时间超过一天的，如果当前时间之前的排班也需初始化
-		if tranInfos[i].DurationDays > 1 {
-			for d := 1 - tranInfos[i].DurationDays; d < 0; d++ {
-				initScheduleByDate(now.AddDate(0, 0, int(d)), &tranInfos[i])
+		start := now
+		// 非每天发车的车次
+		if tranInfos[i].ScheduleDays != 1 {
+			start = tranInfos[i].EnableStartDate
+			// 确定该车次在今后一个月内的首次发车时间
+			for d := 0; ; d += tranInfos[i].ScheduleDays {
+				tempDay := start.AddDate(0, 0, d)
+				if !tempDay.Before(today) {
+					start = tempDay
+					break
+				}
 			}
+		}
+		// 路段出发间隔天数不为零，则初次发车时间应向前推，使该车次的最后一个路段在今后一个月的时间段内
+		if tranInfos[i].RouteDepDurationDays != 0 {
+			durDay := tranInfos[i].RouteDepDurationDays
+			lastRouteDepDay := start.AddDate(0, 0, durDay)
+			for d := tranInfos[i].ScheduleDays; ; d += tranInfos[i].ScheduleDays {
+				tempDay := lastRouteDepDay.AddDate(0, 0, -d)
+				if tempDay.Before(today) {
+					break
+				}
+				if tempDay.AddDate(0, 0, -durDay).After(tranInfos[i].EnableStartDate) {
+					start = tempDay.AddDate(0, 0, -durDay)
+				}
+			}
+		}
+		end := now.AddDate(0, 0, constDays)
+		if tranInfos[i].EnableEndDate.Before(end) {
+			end = tranInfos[i].EnableEndDate
+		}
+		for day := start; day.Before(end) || isSameDay(day, end); day = day.AddDate(0, 0, tranInfos[i].ScheduleDays) {
+			initScheduleByDate(day, &tranInfos[i])
 		}
 	}
 }
 
 func initScheduleByDate(date time.Time, t *TranInfo) {
 	strDate := date.Format(constYmdFormat)
-	tranScheduleColl := getMgoDB().C("scheduleTran")
+	tranScheduleColl := getMgoDB().C("tranSchedule")
 	sTran := ScheduleTran{}
-	q := tranScheduleColl.Find(bson.M{"departureDate": strDate, "tranNum": t.TranNum})
-	count, err := q.Count()
-	if err != nil {
-		panic(err)
-	}
-	if count != 0 {
-		if err = q.One(&sTran); err != nil {
+	// 未找到，则新增一个
+	if err := tranScheduleColl.Find(bson.M{"departureDate": strDate, "tranNum": t.TranNum}).One(&sTran); err != nil {
+		y, M, d := date.Date()
+		h, m, s := t.SaleTicketTime.Clock()
+		sTran = ScheduleTran{
+			DepartureDate:  strDate,
+			TranNum:        t.TranNum,
+			SaleTicketTime: time.Date(y, M, d, h, m, s, 0, time.Local),
+			Cars:           *t.getScheduleCars(),
+			FullSeatBit:    countSeatBit(0, uint8(len(t.Timetable)-1)),
+		}
+		sTran.carTypeIdxMap = make(map[string]([]uint8))
+		for i := 0; i < len(sTran.Cars); i++ {
+			idxs, exist := sTran.carTypeIdxMap[sTran.Cars[i].SeatType]
+			if !exist {
+				idxs = make([]uint8, 0)
+			}
+			idxs = append(idxs, uint8(i))
+			sTran.carTypeIdxMap[sTran.Cars[i].SeatType] = idxs
+		}
+		if err = tranScheduleColl.Insert(&sTran); err != nil {
 			panic(err)
 		}
-	} else {
-
-	}
-	// q := db.Table("schedule_trans").Where("departure_date = ? and tran_num = ?", strDate, t.TranNum)
-	// q.Count(&count)
-	if count == 0 {
-		// tranList 中相同的车次已经按 EnalbeLevel 排序好了，优先排等级较高的一个
-		sTran = ScheduleTran{DepartureDate: strDate, TranNum: t.TranNum}
-		if date.After(t.EnableStartDate) &&
-			date.Before(t.EnableEndDate) {
-			// 对于不是每天发车的车次，需要根据其间隔发车天数来初始化
-			if t.DurationDays > 1 {
-				durFormat := date.AddDate(0, 0, 1-int(t.DurationDays)).Format(constYmdFormat)
-				db.Table("schedule_trans").Where("tran_num = ? and strcmp(departure_date, ?) <= 0 and strcmp(departure_date, ?) >= 0", t.TranNum, strDate, durFormat).Count(&count)
-				// 站发车间隔时间内，已经有该车次的排班数据，则跳过
-				if count != 0 {
-					return
-				}
-			}
-			initScheduleTran(&sTran, t, false)
-		}
-	} else {
-		//q.First(&sTran)
-		initScheduleTran(&sTran, t, true)
 	}
 	trans := scheduleTranMap[strDate]
 	trans = append(trans, sTran)
 	scheduleTranMap[strDate] = trans
 }
-
-func initScheduleTran(st *ScheduleTran, t *TranInfo, exist bool) {
-	routeCount := uint8(len(t.Timetable) - 1)
-	st.FullSeatBit = countSeatBit(0, routeCount)
-	if !exist {
-		db.Create(st)
-		st.Cars = *t.getScheduleCars()
-		// scheduleCars :=  make([]ScheduleCar, len(t.Cars))
-		// for i := 0; i < len(t.Cars); i++ {
-		// 	scheduleCars[i] = ScheduleCar{
-		// 		ScheduleTranID: st.ID,
-		// 		SeatType:       t.Cars[i].SeatType,
-		// 		CarNum:         uint8(i + 1),
-		// 		NoSeatCount:    t.Cars[i].NoSeatCount,
-		// 	}
-		// 	// 站票数不为零，才初始化EachRouteTravelerCount
-		// 	if t.Cars[i].NoSeatCount != 0 {
-		// 		tempStrArr := make([]string, routeCount)
-		// 		for j := 0; j < len(tempStrArr); j++ {
-		// 			tempStrArr[j] = "0"
-		// 		}
-		// 		scheduleCars[i].EachRouteTravelerCount = make([]uint8, routeCount)
-		// 		scheduleCars[i].EachRouteTravelerCountStr = strings.Join(tempStrArr, ",")
-		// 	}
-		// 	db.Create(&scheduleCars[i])
-		// 	var seats []Seat
-		// 	db.Where("car_id = ?", t.Cars[i].ID).Order("seat_num").Find(&seats)
-		// 	scheduleSeats := make([]ScheduleSeat, len(seats))
-		// 	for j := 0; j < len(seats); j++ {
-		// 		scheduleSeats[j].CarID = scheduleCars[i].ID
-		// 		scheduleSeats[j].SeatNum = seats[j].SeatNum
-		// 		scheduleSeats[j].IsStudent = seats[j].IsStudent
-		// 		db.Create(&scheduleSeats[j])
-		// 	}
-		// 	scheduleCars[i].Seats = scheduleSeats
-		// }
-	} else {
-		db.Save(st)
-		var cars []ScheduleCar
-		db.Where("schedule_tran_id = ?", st.ID).Order("car_num").Find(&cars)
-		st.Cars = cars
-		for i := 0; i < len(st.Cars); i++ {
-			if st.Cars[i].NoSeatCount != 0 {
-				//tempStrArr := strings.Split(st.Cars[i].EachRouteTravelerCountStr, ",")
-				// st.Cars[i].EachRouteTravelerCount = make([]uint8, len(tempStrArr))
-				// for j := 0; j < len(tempStrArr); j++ {
-				// 	count, _ := strconv.Atoi(tempStrArr[j])
-				// 	st.Cars[i].EachRouteTravelerCount[j] = uint8(count)
-				// }
-			}
-			var seats []ScheduleSeat
-			db.Where("car_id = ?", st.Cars[i].ID).Order("seat_num").Find(&seats)
-			st.Cars[i].Seats = seats
-		}
-	}
-}
-
-// 余票信息按出发时间排序，也可以丢到前端去排序，js的排序还是比较方便的
-type residualTicketSort []*ResidualTicketInfo
-
-func (r residualTicketSort) Len() int           { return len(r) }
-func (r residualTicketSort) Swap(i, j int)      { r[i], r[j] = r[j], r[i] }
-func (r residualTicketSort) Less(i, j int) bool { return r[i].depTime.Before(r[j].depTime) }
 
 // ResidualTicketInfo 余票信息结构
 type ResidualTicketInfo struct {
@@ -185,10 +159,7 @@ func newResidualTicketInfo(t *TranInfo, depIdx, arrIdx uint8) *ResidualTicketInf
 }
 
 func (r *ResidualTicketInfo) setScheduleInfo(st *ScheduleTran, isStudent bool) {
-	r.remark = st.NotSaleRemark
-	if seatCount, success := st.GetSeatCount(r.depIdx, r.arrIdx, isStudent); success {
-		r.seatCount = seatCount
-	}
+	r.seatCount = *st.GetSeatCount(r.depIdx, r.arrIdx, isStudent)
 }
 
 // 结果转为字符串
@@ -217,18 +188,12 @@ func (r *ResidualTicketInfo) toString() string {
 
 // ScheduleTran 车次排班信息
 type ScheduleTran struct {
-	DepartureDate  string        `gorm:"index:q;type:varchar(10)" json:"departureDate"` // 发车日期
-	TranNum        string        `gorm:"index:q;type:varchar(10)" json:"tranNum"`       // 车次号
-	SaleTicketTime time.Time     `gorm:"type:datetime" json:"saleTicketTime"`           // 售票时间
-	NotSaleRemark  string        `json:"notSaleRemark"`                                 // 不售票的说明，路线调整啥的
-	Cars           []ScheduleCar `gorm:"-"`                                             // 车厢
-	// 各种类型车厢的起始索引
-	// 依次是：商务座、一等座、二等座、高级软卧、软卧、动卧、硬卧、软座、硬座
-	// 若值是[0, 1, 4, 6, 6, 6, 6, 6, 10, 15]，
-	// 表示第一个车厢是商务座; 第2-4个车厢是一等座; 第5-6个车厢是二等座; 高级软卧、软卧、动卧、硬卧都没有; 第7-10个是软座; 第11-15个是硬座;
-	carTypesIdx []uint8 `gorm:"-"`
-	FullSeatBit uint64  // 全程满座的位标记值，某座位的位标记与此值相等时，表示该座位全程满座了
-	DBModel
+	DepartureDate  string               `gorm:"index:q;type:varchar(10)" json:"departureDate"` // 发车日期
+	TranNum        string               `gorm:"index:q;type:varchar(10)" json:"tranNum"`       // 车次号
+	SaleTicketTime time.Time            `gorm:"type:datetime" json:"saleTicketTime"`           // 售票时间
+	Cars           []ScheduleCar        `gorm:"-"`                                             // 车厢
+	carTypeIdxMap  map[string]([]uint8) // 各座次类型及其对应的车厢索引集合
+	FullSeatBit    uint64               // 全程满座的位标记值，某座位的位标记与此值相等时，表示该座位全程满座了
 }
 
 func getScheduleTran(tranNum, date string) *ScheduleTran {
@@ -247,42 +212,28 @@ func (st *ScheduleTran) Save() (bool, string) {
 }
 
 // GetSeatCount 获取余票信息
-func (st *ScheduleTran) GetSeatCount(depIdx, arrIdx uint8, isStudent bool) (result []int, success bool) {
-	// 有不售票说明，表示当前不售票，不用查余票数
-	if st.NotSaleRemark != "" {
-		return
-	}
-	// 当前时间未开售，不用查询余票数
-	if st.SaleTicketTime.After(time.Now()) {
-		return
-	}
+func (st *ScheduleTran) GetSeatCount(depIdx, arrIdx uint8, isStudent bool) *[]int {
 	// 总共11类座次
-	result = make([]int, 11)
+	result := []int{-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}
 	// 路段位标记
-	seatBit := countSeatBit(depIdx, arrIdx)
-	var noSeatCount uint8
-	for i := 0; i < len(st.carTypesIdx)-1; i++ {
-		start, end := st.carTypesIdx[i], st.carTypesIdx[i+1]
-		if start == end {
-			result[i] = -1
-			continue
-		}
-		availableSeatCount := 0
-		for j := start; j < end && availableSeatCount < constMaxAvaliableSeatCount; j++ {
-			for k := 0; k < len(st.Cars[j].Seats) && availableSeatCount < constMaxAvaliableSeatCount; k++ {
-				if st.Cars[j].Seats[k].IsAvailable(seatBit, isStudent) {
-					availableSeatCount++
+	seatBit, noSeatCount := countSeatBit(depIdx, arrIdx), 0
+	for seatType, idxs := range st.carTypeIdxMap {
+		resultIdx := seatTypeIdxMap[seatType]
+		avaliableSeatCount := 0
+		for _, idx := range idxs {
+			for i := 0; i < len(st.Cars[idx].Seats) && avaliableSeatCount < constMaxAvaliableSeatCount; i++ {
+				if st.Cars[idx].Seats[i].IsAvailable(seatBit, isStudent) {
+					avaliableSeatCount++
 				}
 			}
 			if noSeatCount < constMaxAvaliableSeatCount {
-				noSeatCount += st.Cars[j].getNoSeatCount(seatBit, depIdx, arrIdx)
+				noSeatCount += int(st.Cars[idx].getNoSeatCount(depIdx, arrIdx))
 			}
 		}
-		result[i] = availableSeatCount
+		result[resultIdx] = avaliableSeatCount
 	}
-	result[len(result)-1] = int(noSeatCount)
-	success = true
-	return
+	result[len(result)-1] = noSeatCount
+	return &result
 }
 
 // ScheduleCar 排班中的车厢
@@ -299,7 +250,7 @@ type ScheduleCar struct {
 	DBModel
 }
 
-func (c *ScheduleCar) getNoSeatCount(seatBit uint64, depIdx, arrIdx uint8) uint8 {
+func (c *ScheduleCar) getNoSeatCount(depIdx, arrIdx uint8) uint8 {
 	// 车厢未设置站票时，直接返回 0
 	if c.NoSeatCount == 0 {
 		return 0
@@ -390,9 +341,10 @@ func (c *ScheduleCar) releaseSeat(depIdx, arrIdx uint8) {
 
 // ScheduleSeat 排班中的座位
 type ScheduleSeat struct {
+	SeatNum    string
+	IsStudent  bool
 	SeatBit    uint64 // 座位的位标记，64位代表64个路段，值为7时，表示从起始站到第四站，这个座位都被人订了
 	sync.Mutex        // 锁，订票与退票均需要锁
-	Seat
 }
 
 // IsAvailable 根据路段和乘客类型判断能否订票

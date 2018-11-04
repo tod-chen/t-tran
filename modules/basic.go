@@ -55,11 +55,11 @@ func initCarMap() {
 	var cars []Car
 	db.Find(&cars)
 	fmt.Println("cars count:", len(cars))
-	for i:=0;i<len(cars);i++{
+	for i := 0; i < len(cars); i++ {
 		db.Where("car_id = ?", cars[i].ID).Find(&cars[i].Seats)
+		carMap[cars[i].ID] = cars[i]
 	}
 }
-
 func initTranInfos() {
 	fmt.Println("init Tran Info begin")
 	defer fmt.Println("init Tran Info end")
@@ -70,7 +70,6 @@ func initTranInfos() {
 		tranInfos[i].getFullInfo()
 	}
 }
-
 func initCityTranMap() {
 	fmt.Println("init City Map begin")
 	defer fmt.Println("init City Map end")
@@ -88,7 +87,6 @@ func initCityTranMap() {
 		}
 	}
 }
-
 func getTranInfo(tranNum string, date time.Time) *TranInfo {
 	idx := sort.Search(len(tranInfos), func(i int) bool {
 		return tranInfos[i].TranNum == tranNum &&
@@ -97,15 +95,42 @@ func getTranInfo(tranNum string, date time.Time) *TranInfo {
 	})
 	return &tranInfos[idx]
 }
+func getViaTrans(depS, arrS *Station) (result []*TranInfo){
+	// 获取经过出发站所在城市的所有车次
+	depTrans, exist := cityTranMap[depS.CityCode]
+	if !exist {
+		return
+	}
+	// 获取经过目的站所在城市的所有车次
+	arrTrans, exist := cityTranMap[arrS.CityCode]
+	if !exist{
+		return
+	}
+	if len(arrTrans) < len(depTrans){
+		arrTrans, depTrans = depTrans, arrTrans
+	}
+	// 用map取经过出发站城市车次和目的站城市车次的交集
+	m := make(map[string](bool), len(depTrans))
+	for _, t := range depTrans{
+		m[t.TranNum + t.EnableStartDate.Format(constYmdFormat)] = false
+	}
+	for idx, t := range arrTrans{
+		// 属于交集，则放置结果集中
+		if _, ok := m[t.TranNum + t.EnableStartDate.Format(constYmdFormat)]; ok {
+			result = append(result, arrTrans[idx])
+		}
+	}
+	return
+}
 
 // TranInfo 列车信息结构体 ===============================start
 type TranInfo struct {
-	TranNum        string `gorm:"index:main;type:varchar(10)" json:"tranNum"` // 车次号
-	DurationDays   uint8  `json:"durationDays"`                               // 一趟行程运行多少天，次日达则值应为2
-	ScheduleDays   uint8  `gorm:"default:1" json:"scheduleDays"`              // 间隔多少天发一趟车，绝大多数是1天
-	IsHighPriority bool   `gorm:"default:0" json:"isHighPriority"`            // 是否优先级较高，用于相同车次两个时间冲突时优先已哪个为准
-	IsSaleTicket   bool   `gorm:"default:1"`                                  // 是否售票
-	NonSaleRemark  string `gorm:"type:varchar(100)"`                          // 不售票说明
+	TranNum              string    `gorm:"index:main;type:varchar(10)" json:"tranNum"` // 车次号
+	RouteDepDurationDays int       `json:"durationDays"`                               // 路段出发间隔天数：最后一个路段的发车时间与起点站发车时间的间隔天数
+	ScheduleDays         int       `gorm:"default:1" json:"scheduleDays"`              // 间隔多少天发一趟车，绝大多数是1天
+	IsSaleTicket         bool      `gorm:"default:1"`                                  // 是否售票
+	SaleTicketTime       time.Time // 售票时间，不需要日期部分，只取时间部分
+	NonSaleRemark        string    `gorm:"type:varchar(100)"` // 不售票说明
 	// 生效开始日期 默认零值
 	EnableStartDate time.Time `gorm:"index:query;type:datetime;default:'0000-00-00 00:00:00'" json:"enableStartDate"`
 	// 生效截止日期 默认最大值
@@ -120,7 +145,6 @@ type TranInfo struct {
 func (t *TranInfo) isIntercity() bool {
 	return strings.Index(t.TranNum, "C") == 0
 }
-
 func (t *TranInfo) getFullInfo() {
 	// 获取时刻表信息
 	var routes []Route
@@ -143,8 +167,7 @@ func (t *TranInfo) getFullInfo() {
 		}
 	}
 }
-
-func (t *TranInfo) getScheduleCars() *[]ScheduleCar {
+func (t *TranInfo) getScheduleCars() (sCars *[]ScheduleCar) {
 	// 获取车厢信息
 	carSettings, carCount := strings.Split(t.CarIds, ";"), 0
 	carIds, carIDCountMap := make([]int, len(carSettings)), make(map[int]int, len(carSettings))
@@ -158,22 +181,20 @@ func (t *TranInfo) getScheduleCars() *[]ScheduleCar {
 			carCount += count
 		}
 	}
-	result := make([]ScheduleCar, carCount)
-	carIdx := 0
-	var cars []Car
-	db.Where("id in (?)", carIds).Find(&cars)
-	// 根据车厢配置，组装车厢
-	for idx := 0; idx < len(cars); idx++ {
-		var seats []Seat
-		db.Where("car_id = ?", cars[idx].ID).Find(&seats)
-		cars[idx].Seats = seats
-		for i := 0; i < carIDCountMap[int(cars[idx].ID)]; i++ {			
+	result, carIdx := make([]ScheduleCar, carCount), uint8(0)
+	for id, count := range carIDCountMap {
+		c := carMap[id]
+		for i:=0; i< count;i++{
 			result[carIdx] = ScheduleCar{
-				SeatType:    cars[idx].SeatType,
+				SeatType:    c.SeatType,
 				CarNum:      uint8(len(result)) + 1,
-				NoSeatCount: cars[idx].NoSeatCount,
-				Seats:       make([]ScheduleSeat, len(cars[idx].Seats)),
+				NoSeatCount: c.NoSeatCount,
+				Seats:       make([]ScheduleSeat, len(c.Seats)),
 				EachRouteTravelerCount: make([]uint8, len(t.Timetable)-1),
+			}
+			for si :=0; si<len(c.Seats);si++{
+				result[carIdx].Seats[si].SeatNum = c.Seats[si].SeatNum
+				result[carIdx].Seats[si].IsStudent = c.Seats[si].IsStudent
 			}
 			carIdx++
 		}
@@ -228,8 +249,8 @@ func (t *TranInfo) initTimetable() {
 			t.Timetable[i].DepTime = t.Timetable[i].DepTime.AddDate(0, 0, 1)
 		}
 	}
-	// 时刻表中的第一站出发日期，默认都为0001-01-01，所以终点站的日期即为其全程运行的天数
-	t.DurationDays = uint8(t.Timetable[len(t.Timetable)-1].ArrTime.YearDay())
+	// 时刻表中的第一站出发日期，默认都为0001-01-01，所以最后一个路段的发车日期 - 1，就是路段出发间隔天数
+	t.RouteDepDurationDays = t.Timetable[len(t.Timetable)-1].DepTime.YearDay() - 1
 }
 
 // 根据起止站获取各类座位的票价
@@ -277,7 +298,7 @@ func (t *TranInfo) IsMatchQuery(depS, arrS *Station, queryDate time.Time) (depId
 	if !ok {
 		return
 	}
-	// 计算当前车次信息的起点站发车日期
+	// 计算当前车次信息的出发站发车日期
 	date := queryDate.AddDate(0, 0, 1-t.Timetable[depIdx].DepTime.Day())
 	// 该发车日期不在有效时间段内，则返回false
 	if date.Before(t.EnableStartDate) || date.After(t.EnableEndDate) {
@@ -345,13 +366,13 @@ type RoutePrice struct {
 
 // Car 车厢信息结构体
 type Car struct {
+	ID          int
 	TranType    string `gorm:"type:varchar(20)" json:"tranType"` // 车次类型 高铁、动车、直达等
 	SeatType    string `gorm:"type:varchar(5)" json:"seatType"`  // 车厢的座位类型
 	SeatCount   uint8  // 车厢内座位数(或床位数)
 	NoSeatCount uint8  `json:"noSeatCount"`                     // 车厢内站票数
 	Remark      string `gorm:"type:nvarchar(50)" json:"remark"` // 说明
 	Seats       []Seat `json:"seats"`                           // 车厢的所有座位
-	DBModel
 }
 
 // Save 保存车厢信息到数据库
@@ -372,7 +393,7 @@ func (c *Car) Save() (bool, string) {
 
 // Seat 座位信息结构体
 type Seat struct {
-	CarID     uint64 `gorm:"index:main"`                     // 车厢ID
+	CarID     int    `gorm:"index:main"`                     // 车厢ID
 	SeatNum   string `gorm:"type:varchar(5)" json:"seatNum"` // 座位号
 	IsStudent bool   `json:"isStudent"`                      // 是否学生票
 }
