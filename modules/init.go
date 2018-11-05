@@ -8,7 +8,11 @@ import (
 	// mysql
 	_ "github.com/jinzhu/gorm/dialects/mysql"
 
-	"gopkg.in/mgo.v2"	
+	"gopkg.in/mgo.v2"
+)
+
+const (
+	constMgoDB = "t-tran"
 )
 
 var (
@@ -30,8 +34,7 @@ type DBModel struct {
 	UpdateAt time.Time `gorm:"type:datetime"` // 更新时间
 }
 
-func getMgoDB() *mgo.Database {
-	var tmpSession *mgo.Session
+func getMgoSession() *mgo.Session {
 	if mgoSession == nil {
 		var err error
 		mgoSession, err = mgo.Dial("localhost:27017")
@@ -39,9 +42,8 @@ func getMgoDB() *mgo.Database {
 			panic(err)
 		}
 		mgoSession.SetMode(mgo.Monotonic, true)
-		tmpSession = mgoSession.Clone()
 	}
-	return tmpSession.DB("t-tran")
+	return mgoSession.Clone()
 }
 
 func init() {
@@ -71,10 +73,13 @@ func init() {
 		db.CreateTable(&Contact{})
 	}
 
+	sTran := &ScheduleTran{TranNum: "C2220"}
+	fmt.Println(sTran)
+
 	initGoPool()
 	initStation()
 	initTranInfo()
-	//initTranSchedule()
+	initTranSchedule()
 
 	fmt.Println("init done...")
 }

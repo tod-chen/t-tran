@@ -44,15 +44,14 @@ func isSameDay(src, tar time.Time) bool {
 
 // 初始化列车排班
 func initTranSchedule() {
-	fmt.Println("init scheduleTran beginning")
-	defer fmt.Println("init scheduleTran end")
-
 	scheduleTranMap = make(map[string]([]ScheduleTran), constDays)
 	now := time.Now()
 	y, m, d := now.Date()
 	today := time.Date(y, m, d, 0, 0, 0, 0, time.Local)
+	session := getMgoSession()
+	defer session.Close()
 	for i := 0; i < len(tranInfos); i++ {
-		fmt.Println("init schedule tran count: ", i)
+		fmt.Println("init schedule tran count: ", i, ", tranNum:", tranInfos[i].TranNum)
 		if !tranInfos[i].IsSaleTicket {
 			continue
 		}
@@ -91,17 +90,22 @@ func initTranSchedule() {
 			initScheduleByDate(day, &tranInfos[i])
 		}
 	}
+	fmt.Println("tran schedule count:", len(scheduleTranMap))
+	fmt.Println(scheduleTranMap["2018-11-07"][1])
+	fmt.Println("init scheduleTran complete")
 }
 
 func initScheduleByDate(date time.Time, t *TranInfo) {
-	strDate := date.Format(constYmdFormat)
-	tranScheduleColl := getMgoDB().C("tranSchedule")
-	sTran := ScheduleTran{}
+	strDate, sTran := date.Format(constYmdFormat), &ScheduleTran{}
+	tranScheduleColl := getMgoSession().DB(constMgoDB).C("tranSchedule")
+	fmt.Println(strDate)
+	q := tranScheduleColl.Find(bson.M{"departureDate": strDate, "tranNum": t.TranNum})
+	err := q.One(sTran)
 	// 未找到，则新增一个
-	if err := tranScheduleColl.Find(bson.M{"departureDate": strDate, "tranNum": t.TranNum}).One(&sTran); err != nil {
+	if err != nil {
 		y, M, d := date.Date()
 		h, m, s := t.SaleTicketTime.Clock()
-		sTran = ScheduleTran{
+		sTran = &ScheduleTran{
 			DepartureDate:  strDate,
 			TranNum:        t.TranNum,
 			SaleTicketTime: time.Date(y, M, d, h, m, s, 0, time.Local),
@@ -122,7 +126,7 @@ func initScheduleByDate(date time.Time, t *TranInfo) {
 		}
 	}
 	trans := scheduleTranMap[strDate]
-	trans = append(trans, sTran)
+	trans = append(trans, *sTran)
 	scheduleTranMap[strDate] = trans
 }
 
@@ -188,12 +192,12 @@ func (r *ResidualTicketInfo) toString() string {
 
 // ScheduleTran 车次排班信息
 type ScheduleTran struct {
-	DepartureDate  string               `gorm:"index:q;type:varchar(10)" json:"departureDate"` // 发车日期
-	TranNum        string               `gorm:"index:q;type:varchar(10)" json:"tranNum"`       // 车次号
-	SaleTicketTime time.Time            `gorm:"type:datetime" json:"saleTicketTime"`           // 售票时间
-	Cars           []ScheduleCar        `gorm:"-"`                                             // 车厢
-	carTypeIdxMap  map[string]([]uint8) // 各座次类型及其对应的车厢索引集合
-	FullSeatBit    uint64               // 全程满座的位标记值，某座位的位标记与此值相等时，表示该座位全程满座了
+	DepartureDate  string               `bson:"departureDate"`  // 发车日期
+	TranNum        string               `bson:"tranNum"`        // 车次号
+	SaleTicketTime time.Time            `bson:"saleTicketTime"` // 售票时间
+	Cars           []ScheduleCar        `bson:"cars"`           // 车厢
+	carTypeIdxMap  map[string]([]uint8) `bson:"carTypeIdxMap"`  // 各座次类型及其对应的车厢索引集合
+	FullSeatBit    uint64               `bson:"fullSeatBit"`    // 全程满座的位标记值，某座位的位标记与此值相等时，表示该座位全程满座了
 }
 
 func getScheduleTran(tranNum, date string) *ScheduleTran {
@@ -238,11 +242,10 @@ func (st *ScheduleTran) GetSeatCount(depIdx, arrIdx uint8, isStudent bool) *[]in
 
 // ScheduleCar 排班中的车厢
 type ScheduleCar struct {
-	ScheduleTranID uint64         // 车次排班ID
-	SeatType       string         // 座次
-	CarNum         uint8          // 车厢号
-	NoSeatCount    uint8          // 车厢内站票数
-	Seats          []ScheduleSeat // 车厢的所有座位
+	SeatType    string         // 座次
+	CarNum      uint8          // 车厢号
+	NoSeatCount uint8          // 车厢内站票数
+	Seats       []ScheduleSeat // 车厢的所有座位
 	//EachRouteTravelerCountStr string         // 各路段乘客人数，用英文逗号分隔存于数据库
 	// 各路段乘客人数，用于计算可拼凑的站票数，仅在有站票的车厢使用
 	EachRouteTravelerCount []uint8 //`gorm:"-"`
@@ -343,8 +346,8 @@ func (c *ScheduleCar) releaseSeat(depIdx, arrIdx uint8) {
 type ScheduleSeat struct {
 	SeatNum    string
 	IsStudent  bool
-	SeatBit    uint64 // 座位的位标记，64位代表64个路段，值为7时，表示从起始站到第四站，这个座位都被人订了
-	sync.Mutex        // 锁，订票与退票均需要锁
+	SeatBit    uint64     // 座位的位标记，64位代表64个路段，值为7时，表示从起始站到第四站，这个座位都被人订了
+	sync.Mutex `bson:"-"` // 锁，订票与退票均需要锁
 }
 
 // IsAvailable 根据路段和乘客类型判断能否订票

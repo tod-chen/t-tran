@@ -46,12 +46,10 @@ var (
 func initTranInfo() {
 	initCarMap()
 	initTranInfos()
-	//initCityTranMap()
+	initCityTranMap()
 }
 
 func initCarMap() {
-	fmt.Println("init car map begin")
-	defer fmt.Println("init car map end")
 	var cars []Car
 	db.Find(&cars)
 	carMap = make(map[int](Car), len(cars))
@@ -59,21 +57,18 @@ func initCarMap() {
 		db.Where("car_id = ?", cars[i].ID).Find(&cars[i].Seats)
 		carMap[cars[i].ID] = cars[i]
 	}
+	fmt.Println("init car map complete")
 }
 func initTranInfos() {
-	fmt.Println("init Tran Info begin")
-	defer fmt.Println("init Tran Info end")
-	db.Where("id = ?", 1).Find(&tranInfos)
-	// now, lastDay := time.Now(), time.Now().AddDate(0, 0, constDays)
-	// today, lastDate := now.Format(constYmdFormat), lastDay.Format(constYmdFormat)
-	// db.Where("enable_end_date >= ? and ? >= enable_start_date", today, lastDate).Order("tran_num, enable_start_date").Find(&tranInfos)
+	now, lastDay := time.Now(), time.Now().AddDate(0, 0, constDays)
+	today, lastDate := now.Format(constYmdFormat), lastDay.Format(constYmdFormat)
+	db.Where("enable_end_date >= ? and ? >= enable_start_date", today, lastDate).Order("tran_num, enable_start_date").Limit(10).Find(&tranInfos)
 	for i := 0; i < len(tranInfos); i++ {
-		//tranInfos[i].getFullInfo()
+		tranInfos[i].getFullInfo()
 	}
+	fmt.Println("init tran infos complete")
 }
 func initCityTranMap() {
-	fmt.Println("init City Map begin")
-	defer fmt.Println("init City Map end")
 	cityTranMap = make(map[string]([]*TranInfo), constCityCount)
 	for i := 0; i < len(tranInfos); i++ {
 		for j := 0; j < len(tranInfos[i].Timetable); j++ {
@@ -87,6 +82,7 @@ func initCityTranMap() {
 			cityTranMap[cityCode] = tranPtrs
 		}
 	}
+	fmt.Println("init city tran map complete")
 }
 func getTranInfo(tranNum string, date time.Time) *TranInfo {
 	idx := sort.Search(len(tranInfos), func(i int) bool {
@@ -149,8 +145,6 @@ func (t *TranInfo) isIntercity() bool {
 func (t *TranInfo) getFullInfo() {
 	// 获取时刻表信息
 	db.Where("tran_id = ?", t.ID).Order("station_index").Find(&t.Timetable)
-	t.RouteDepDurationDays = t.Timetable[len(t.Timetable)-1].DepTime.YearDay() - 1
-	db.Model(t).Update("route_dep_duration_days", t.RouteDepDurationDays)
 
 	// 获取各席别在各路段的价格，大多数车次只有三类席别（无座不考虑）
 	t.SeatPriceMap = make(map[string]([]float32), 3)

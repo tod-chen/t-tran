@@ -6,9 +6,8 @@ import "fmt"
 var stations []Station
 
 func initStation() {
-	fmt.Println("init stations beginning")
-	defer fmt.Println("init stations end")
 	db.Where("is_passenger = 1").Find(&stations)
+	fmt.Println("init stations complete")
 }
 
 // Station 车站信息

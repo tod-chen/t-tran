@@ -12,14 +12,13 @@ const (
 var goPool *goRoutinePool
 
 func initGoPool() {
-	fmt.Println("init Go Pool begin")
-	defer fmt.Println("init Go Pool end")
 	goPool = &goRoutinePool{}
 	goPool.ch = make(chan byte, constMaxGoroutineCount)
 	for i := 0; i < constMaxGoroutineCount; i++ {
 		goPool.ch <- 1
 	}
 	goPool.active = true
+	fmt.Println("init Go Pool complete")
 }
 
 type goRoutinePool struct {

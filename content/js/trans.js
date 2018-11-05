@@ -34,13 +34,13 @@ function query(){
             for(var i=0; result != null && i<result.trans.length; i++){
                 var t = result.trans[i];
                 var tranNumLink = '<a href="/trans/detail?tranId=' + t.id + '">' + t.tranNum + '</a>';
-                var timetable = getTimeTableTd(t.timetable);                
-                var cars = '';
-                var level = t.isHighPriority;
+                var timetable = getTimeTableTd(t.timetable);
                 var start = new Date(t.enableStartDate).toLocaleDateString();
                 var end = new Date(t.enableEndDate).toLocaleDateString();
-                var tr = '<tr><td>'+tranNumLink+'</td><td>'+timetable+'</td><td>'+cars+'</td><td>'+level
-                    +'</td><td>'+start+'</td><td>'+end+'</td></tr>';
+                var saleTime = new Date(t.saleTicketTime).toLocaleTimeString();
+                var tr = '<tr><td>'+tranNumLink+'</td><td>'+timetable+'</td><td>'+start
+                    +'</td><td>'+end+'</td><td>'+t.scheduleDays+'</td><td>'+(t.isSaleTicket ? '是' : '否')
+                    +'</td><td>'+saleTime+'</td><td>'+t.nonSaleRemark+'</td></tr>';
                 $(tag.tableBody).append(tr);
             }
             $('[data-toggle="popover"]').popover({html : true});
