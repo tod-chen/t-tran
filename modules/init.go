@@ -50,7 +50,7 @@ func init() {
 	fmt.Println("init modules beginning")
 	defer fmt.Println("init modules end")
 	var err error
-	db, err = gorm.Open("mysql", "root:@/t-tran?charset=utf8&parseTime=True&loc=Local")
+	db, err = gorm.Open("mysql", "root:@/t-tran?charset=utf8&parseTime=True&loc=Asia%2FShanghai")
 	if err != nil {
 		panic(err)
 	}
@@ -72,9 +72,6 @@ func init() {
 		db.CreateTable(&User{})
 		db.CreateTable(&Contact{})
 	}
-
-	sTran := &ScheduleTran{TranNum: "C2220"}
-	fmt.Println(sTran)
 
 	initGoPool()
 	initStation()

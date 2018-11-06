@@ -62,7 +62,7 @@ func initCarMap() {
 func initTranInfos() {
 	now, lastDay := time.Now(), time.Now().AddDate(0, 0, constDays)
 	today, lastDate := now.Format(constYmdFormat), lastDay.Format(constYmdFormat)
-	db.Where("enable_end_date >= ? and ? >= enable_start_date", today, lastDate).Order("tran_num, enable_start_date").Limit(10).Find(&tranInfos)
+	db.Where("enable_end_date >= ? and ? >= enable_start_date", today, lastDate).Order("tran_num, enable_start_date").Find(&tranInfos)
 	for i := 0; i < len(tranInfos); i++ {
 		tranInfos[i].getFullInfo()
 	}

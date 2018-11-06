@@ -5,7 +5,7 @@ import (
 )
 
 const (
-	constMaxGoroutineCount = 5000
+	constMaxGoroutineCount = 100
 )
 
 // goroutine 池
