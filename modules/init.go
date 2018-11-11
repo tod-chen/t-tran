@@ -73,10 +73,9 @@ func init() {
 		db.CreateTable(&Contact{})
 	}
 
-	initGoPool()
 	initStation()
 	initTranInfo()
-	initTranSchedule()
+	initSchedule()
 
 	fmt.Println("init done...")
 }

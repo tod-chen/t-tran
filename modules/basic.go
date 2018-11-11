@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -50,6 +51,7 @@ func initTranInfo() {
 }
 
 func initCarMap() {
+	start := time.Now()
 	var cars []Car
 	db.Find(&cars)
 	carMap = make(map[int](Car), len(cars))
@@ -57,18 +59,30 @@ func initCarMap() {
 		db.Where("car_id = ?", cars[i].ID).Find(&cars[i].Seats)
 		carMap[cars[i].ID] = cars[i]
 	}
-	fmt.Println("init car map complete")
+	fmt.Println("init car map complete, cost time:", time.Now().Sub(start).Nanoseconds())
 }
 func initTranInfos() {
+	start := time.Now()
+	goPool := initGoPool(150)
 	now, lastDay := time.Now(), time.Now().AddDate(0, 0, constDays)
 	today, lastDate := now.Format(constYmdFormat), lastDay.Format(constYmdFormat)
 	db.Where("enable_end_date >= ? and ? >= enable_start_date", today, lastDate).Order("tran_num, enable_start_date").Find(&tranInfos)
+	var wg sync.WaitGroup
 	for i := 0; i < len(tranInfos); i++ {
-		tranInfos[i].getFullInfo()
+		goPool.Take()
+		wg.Add(1)
+		go func(idx int) {
+			tranInfos[idx].getFullInfo()
+			goPool.Return()
+			wg.Done()
+		}(i)
 	}
-	fmt.Println("init tran infos complete")
+	wg.Wait()
+	goPool.Close()
+	fmt.Println("init tran infos complete, cost time:", time.Now().Sub(start).Seconds())
 }
 func initCityTranMap() {
+	start := time.Now()
 	cityTranMap = make(map[string]([]*TranInfo), constCityCount)
 	for i := 0; i < len(tranInfos); i++ {
 		for j := 0; j < len(tranInfos[i].Timetable); j++ {
@@ -82,7 +96,7 @@ func initCityTranMap() {
 			cityTranMap[cityCode] = tranPtrs
 		}
 	}
-	fmt.Println("init city tran map complete")
+	fmt.Println("init city tran map complete, cost time:", time.Now().Sub(start).Nanoseconds())
 }
 func getTranInfo(tranNum string, date time.Time) *TranInfo {
 	idx := sort.Search(len(tranInfos), func(i int) bool {
@@ -122,13 +136,13 @@ func getViaTrans(depS, arrS *Station) (result []*TranInfo) {
 
 // TranInfo 列车信息结构体 ===============================start
 type TranInfo struct {
-	ID                   int
-	TranNum              string    `gorm:"index:main;type:varchar(10)" json:"tranNum"` // 车次号
-	RouteDepDurationDays int       `json:"durationDays"`                               // 路段出发间隔天数：最后一个路段的发车时间与起点站发车时间的间隔天数
-	ScheduleDays         int       `gorm:"default:1" json:"scheduleDays"`              // 间隔多少天发一趟车，绝大多数是1天
-	IsSaleTicket         bool      `json:"isSaleTicket"`                               // 是否售票
-	SaleTicketTime       time.Time `json:"saleTicketTime"`                             // 售票时间，不需要日期部分，只取时间部分
-	NonSaleRemark        string    `gorm:"type:varchar(100)" json:"nonSaleRemark"`     // 不售票说明
+	ID                int
+	TranNum           string    `gorm:"index:main;type:varchar(10)" json:"tranNum"` // 车次号
+	RouteDepCrossDays int       `json:"durationDays"`                               // 路段出发跨天数：最后一个路段的发车时间与起点站发车时间的间隔天数
+	ScheduleDays      int       `gorm:"default:1" json:"scheduleDays"`              // 间隔多少天发一趟车，绝大多数是1天
+	IsSaleTicket      bool      `json:"isSaleTicket"`                               // 是否售票
+	SaleTicketTime    time.Time `json:"saleTicketTime"`                             // 售票时间，不需要日期部分，只取时间部分
+	NonSaleRemark     string    `gorm:"type:varchar(100)" json:"nonSaleRemark"`     // 不售票说明
 	// 生效开始日期 默认零值
 	EnableStartDate time.Time `gorm:"index:query;type:datetime;default:'0000-00-00 00:00:00'" json:"enableStartDate"`
 	// 生效截止日期 默认最大值
@@ -178,18 +192,14 @@ func (t *TranInfo) getScheduleCars() (sCars *[]ScheduleCar) {
 	}
 	result, carIdx := make([]ScheduleCar, carCount), uint8(0)
 	for id, count := range carIDCountMap {
-		c := carMap[id]
+		sc := scheduleCarMap[id]
 		for i := 0; i < count; i++ {
 			result[carIdx] = ScheduleCar{
-				SeatType:    c.SeatType,
-				CarNum:      uint8(len(result)) + 1,
-				NoSeatCount: c.NoSeatCount,
-				Seats:       make([]ScheduleSeat, len(c.Seats)),
-				EachRouteTravelerCount: make([]uint8, len(t.Timetable)-1),
-			}
-			for si := 0; si < len(c.Seats); si++ {
-				result[carIdx].Seats[si].SeatNum = c.Seats[si].SeatNum
-				result[carIdx].Seats[si].IsStudent = c.Seats[si].IsStudent
+				SeatType:    sc.SeatType,
+				CarNum:      carIdx + 1,
+				NoSeatCount: sc.NoSeatCount,
+				Seats:       sc.Seats,
+				EachRouteTravelerCount: sc.EachRouteTravelerCount,
 			}
 			carIdx++
 		}
@@ -245,7 +255,7 @@ func (t *TranInfo) initTimetable() {
 		}
 	}
 	// 时刻表中的第一站出发日期，默认都为0001-01-01，所以最后一个路段的发车日期 - 1，就是路段出发间隔天数
-	t.RouteDepDurationDays = t.Timetable[len(t.Timetable)-1].DepTime.YearDay() - 1
+	t.RouteDepCrossDays = t.Timetable[len(t.Timetable)-1].DepTime.YearDay() - 1
 }
 
 // 根据起止站获取各类座位的票价

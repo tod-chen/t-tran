@@ -8,7 +8,6 @@ import (
 	"sync"
 	"time"
 
-	"gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
 )
 
@@ -33,6 +32,8 @@ var (
 		constSeatTypeSoftSeat:            8,
 		constSeatTypeHardSeat:            9,
 	}
+	// 排班的车厢集
+	scheduleCarMap map[int](*ScheduleCar)
 	// 列车按日期安排表
 	scheduleTranMap map[string]([]ScheduleTran)
 )
@@ -43,8 +44,34 @@ func isSameDay(src, tar time.Time) bool {
 	return sy == ty && sm == tm && sd == td
 }
 
+func initSchedule() {
+	initScheduleCar()
+	initScheduleTran()
+}
+
+// 初始化排班的车厢
+func initScheduleCar() {
+	start := time.Now()
+	scheduleCarMap = make(map[int](*ScheduleCar), len(carMap))
+	for id, car := range carMap {
+		sc := ScheduleCar{
+			SeatType:    car.SeatType,
+			NoSeatCount: car.NoSeatCount,
+			Seats:       make([]ScheduleSeat, len(car.Seats)),
+		}
+		for i := 0; i < len(car.Seats); i++ {
+			sc.Seats[i].SeatNum = car.Seats[i].SeatNum
+			sc.Seats[i].IsStudent = car.Seats[i].IsStudent
+		}
+		scheduleCarMap[id] = &sc
+	}
+	fmt.Println("init schedule car complete, cost time:", time.Now().Sub(start).Nanoseconds())
+}
+
 // 初始化列车排班
-func initTranSchedule() {
+func initScheduleTran() {
+	start := time.Now()
+	goPool := initGoPool(350)
 	scheduleTranMap = make(map[string]([]ScheduleTran), constDays)
 	now := time.Now()
 	y, m, d := now.Date()
@@ -53,89 +80,73 @@ func initTranSchedule() {
 	defer session.Close()
 	coll := session.DB(constMgoDB).C("tranSchedule")
 	var wg sync.WaitGroup
-	for i := 0; i < len(tranInfos); i++ {
-		if !tranInfos[i].IsSaleTicket {
+	for idx := 0; idx < len(tranInfos); idx++ {
+		if idx%500 == 0 {
+			fmt.Println("begin init idx:", idx, ", tranNum:", tranInfos[idx].TranNum)
+		}
+		if !tranInfos[idx].IsSaleTicket {
 			continue
 		}
 		goPool.Take()
 		wg.Add(1)
-		go func(tran_idx int) {
-			defer func() {
-				wg.Done()
-				goPool.Return()
-			}()
-			start := now
+		go func(i int) {
+			start := today
+			if tranInfos[i].EnableStartDate.After(start) {
+				start = tranInfos[i].EnableStartDate
+			}
 			// 非每天发车的车次
-			if tranInfos[tran_idx].ScheduleDays != 1 {
-				start = tranInfos[tran_idx].EnableStartDate
+			if tranInfos[i].ScheduleDays != 1 {
 				// 确定该车次在今后一个月内的首次发车时间
-				for d := 0; ; d += tranInfos[tran_idx].ScheduleDays {
-					tempDay := start.AddDate(0, 0, d)
-					if !tempDay.Before(today) {
-						start = tempDay
+				for {
+					hours := int(start.Sub(tranInfos[i].EnableStartDate).Hours())
+					if hours%tranInfos[i].ScheduleDays*24 == 0 {
 						break
 					}
+					start = start.AddDate(0, 0, 1)
 				}
 			}
 			// 路段出发间隔天数不为零，则初次发车时间应向前推，使该车次的最后一个路段在今后一个月的时间段内
-			if tranInfos[tran_idx].RouteDepDurationDays != 0 {
-				durDay := tranInfos[tran_idx].RouteDepDurationDays
-				lastRouteDepDay := start.AddDate(0, 0, durDay)
-				for d := tranInfos[tran_idx].ScheduleDays; ; d += tranInfos[tran_idx].ScheduleDays {
-					tempDay := lastRouteDepDay.AddDate(0, 0, -d)
-					if tempDay.Before(today) {
+			if tranInfos[i].RouteDepCrossDays != 0 && tranInfos[i].RouteDepCrossDays >= tranInfos[i].ScheduleDays {
+				for tempDay := start.AddDate(0, 0, -tranInfos[i].ScheduleDays); !tempDay.Before(tranInfos[i].EnableStartDate); tempDay = tempDay.AddDate(0, 0, -tranInfos[i].ScheduleDays) {
+					if tempDay.AddDate(0, 0, tranInfos[i].RouteDepCrossDays).Before(today) {
 						break
 					}
-					if tempDay.AddDate(0, 0, -durDay).After(tranInfos[tran_idx].EnableStartDate) {
-						start = tempDay.AddDate(0, 0, -durDay)
+					start = tempDay
+				}
+			}
+			end := today.AddDate(0, 0, constDays)
+			if tranInfos[i].EnableEndDate.Before(end) {
+				end = tranInfos[i].EnableEndDate
+			}
+			sTran := &ScheduleTran{
+				TranNum:     tranInfos[i].TranNum,
+				Cars:        *tranInfos[i].getScheduleCars(),
+				FullSeatBit: countSeatBit(0, uint8(len(tranInfos[i].Timetable)-1)),
+			}
+			sTran.setCarTypeIdxMap()
+			for day := start; !day.After(end); day = day.AddDate(0, 0, tranInfos[i].ScheduleDays) {
+				y, M, d := day.Date()
+				h, m, s := tranInfos[i].SaleTicketTime.Clock()
+				sTran.DepartureDate = day.Format(constYmdFormat)
+				sTran.SaleTicketTime = time.Date(y, M, d-constDays, h, m, s, 0, time.Local)
+				count, err := coll.Find(bson.M{"departureDate": sTran.DepartureDate, "tranNum": sTran.TranNum}).Count()
+				if err != nil {
+					panic(err)
+				}
+				// 未找到，则新增一个
+				if count == 0 {
+					if err = coll.Insert(sTran); err != nil {
+						panic(err)
 					}
 				}
 			}
-			end := now.AddDate(0, 0, constDays)
-			if tranInfos[tran_idx].EnableEndDate.Before(end) {
-				end = tranInfos[tran_idx].EnableEndDate
-			}
-			sTran := &ScheduleTran{
-				TranNum:     tranInfos[tran_idx].TranNum,
-				Cars:        *tranInfos[tran_idx].getScheduleCars(),
-				FullSeatBit: countSeatBit(0, uint8(len(tranInfos[tran_idx].Timetable)-1)),
-			}
-			sTran.carTypeIdxMap = make(map[string]([]uint8))
-			for j := 0; j < len(sTran.Cars); j++ {
-				idxs, exist := sTran.carTypeIdxMap[sTran.Cars[j].SeatType]
-				if !exist {
-					idxs = make([]uint8, 0)
-				}
-				idxs = append(idxs, uint8(j))
-				sTran.carTypeIdxMap[sTran.Cars[j].SeatType] = idxs
-			}
-			for day := start; day.Before(end) || isSameDay(day, end); day = day.AddDate(0, 0, tranInfos[tran_idx].ScheduleDays) {
-				y, M, d := day.Date()
-				h, m, s := tranInfos[tran_idx].SaleTicketTime.Clock()
-				sTran.DepartureDate = day.Format(constYmdFormat)
-				sTran.SaleTicketTime = time.Date(y, M, d+constDays, h, m, s, 0, time.Local)
-				initScheduleByDate(coll, day, sTran)
-			}
-		}(i)
+			goPool.Return()
+			wg.Done()
+		}(idx)
 	}
 	wg.Wait()
-	fmt.Println("init scheduleTran complete")
-}
-
-func initScheduleByDate(coll *mgo.Collection, date time.Time, sTran *ScheduleTran) {
-	count, err := coll.Find(bson.M{"departureDate": sTran.DepartureDate, "tranNum": sTran.TranNum}).Count()
-	if err != nil {
-		panic(err)
-	}
-	// 未找到，则新增一个
-	if count == 0 {
-		if err = coll.Insert(&sTran); err != nil {
-			panic(err)
-		}
-	}
-	// trans := scheduleTranMap[strDate]
-	// trans = append(trans, *sTran)
-	// scheduleTranMap[strDate] = trans
+	goPool.Close()
+	fmt.Println("init scheduleTran complete, cost time:", time.Now().Sub(start).Seconds())
 }
 
 // ResidualTicketInfo 余票信息结构
@@ -221,6 +232,18 @@ func (st *ScheduleTran) Save() (bool, string) {
 	st.SaleTicketTime = st.SaleTicketTime.Add(-8 * time.Hour)
 	db.Save(st)
 	return true, ""
+}
+
+func (st *ScheduleTran) setCarTypeIdxMap() {
+	st.carTypeIdxMap = make(map[string]([]uint8))
+	for i := 0; i < len(st.Cars); i++ {
+		idxs, exist := st.carTypeIdxMap[st.Cars[i].SeatType]
+		if !exist {
+			idxs = make([]uint8, 0)
+		}
+		idxs = append(idxs, uint8(i))
+		st.carTypeIdxMap[st.Cars[i].SeatType] = idxs
+	}
 }
 
 // GetSeatCount 获取余票信息

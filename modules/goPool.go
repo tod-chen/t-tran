@@ -1,24 +1,17 @@
 package modules
 
-import (
-	"fmt"
-)
-
 const (
-	constMaxGoroutineCount = 100
+	constMaxGoroutineCount = 150
 )
 
-// goroutine 池
-var goPool *goRoutinePool
-
-func initGoPool() {
-	goPool = &goRoutinePool{}
-	goPool.ch = make(chan byte, constMaxGoroutineCount)
-	for i := 0; i < constMaxGoroutineCount; i++ {
+func initGoPool(cap int) *goRoutinePool {
+	goPool := &goRoutinePool{}
+	goPool.ch = make(chan byte, cap)
+	for i := 0; i < cap; i++ {
 		goPool.ch <- 1
 	}
 	goPool.active = true
-	fmt.Println("init Go Pool complete")
+	return goPool
 }
 
 type goRoutinePool struct {
@@ -32,4 +25,8 @@ func (p *goRoutinePool) Take() {
 
 func (p *goRoutinePool) Return() {
 	p.ch <- 1
+}
+
+func (p *goRoutinePool) Close() {
+	close(p.ch)
 }
