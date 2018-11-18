@@ -15,8 +15,10 @@ func init() {
 	g.LoadHTMLGlob("templates/*")
 	// load resource files, js/css etc.
 	g.Static("/content", "content")
-	// set admin router
-	setAdminRoute(g)
+	// set admin router	
+	setAdminRouter(g.Group("/admin"))
+	// set user router
+	setUserRouter(g.Group("/"))
 	// set server info
 	s := &http.Server{
 		Addr:           ":8080",

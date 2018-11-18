@@ -63,7 +63,7 @@ func initCarMap() {
 }
 func initTranInfos() {
 	start := time.Now()
-	goPool := initGoPool(150)
+	goPool := newGoPool(150)
 	now, lastDay := time.Now(), time.Now().AddDate(0, 0, constDays)
 	today, lastDate := now.Format(constYmdFormat), lastDay.Format(constYmdFormat)
 	db.Where("enable_end_date >= ? and ? >= enable_start_date", today, lastDate).Order("tran_num, enable_start_date").Find(&tranInfos)
@@ -270,54 +270,67 @@ func (t *TranInfo) getSeatPrice(depIdx, arrIdx uint8) (result map[string]float32
 	return
 }
 
-// IsMatchQuery 判断当前车次在站点及日期上是否匹配
+// IsMatchQuery 判断当前车次在日期上是否匹配
 func (t *TranInfo) IsMatchQuery(depS, arrS *Station, queryDate time.Time) (depIdx, arrIdx uint8, depDate string, ok bool) {
-	depI := -1
+	// 查询的日期需在车次配置的有效期内
+	if queryDate.Before(t.EnableStartDate) || queryDate.After(t.EnableEndDate.AddDate(0, 0, t.RouteDepCrossDays)) {
+		return
+	}
+	depI, timetableLen := -1, len(t.Timetable)
 	// 非城际车次
 	if !t.isIntercity() {
-		// Note: 当某车次的路线经过某城市的两个站，该怎么匹配？ 当前算法是匹配第一个，与12306逻辑一致 12306这里算是一个bug
-		for i := 0; i < len(t.Timetable); i++ {
-			if depI == -1 && t.Timetable[i].CityCode == depS.CityCode {
+		for i := 0; i < timetableLen-1; i++ {
+			if t.Timetable[i].CityCode == depS.CityCode{
 				depI = i
-				depIdx = uint8(i)
+				if t.Timetable[i].StationCode == depS.StationCode {
+					depI = i
+				}
+				continue
 			}
-			if depI != -1 && t.Timetable[i].CityCode == arrS.CityCode {
-				arrIdx = uint8(i)
-				ok = true
+			if depI != -1 && t.Timetable[i].CityCode != depS.CityCode {
 				break
 			}
 		}
+		depIdx = uint8(depI)
+		for i:=depI+1; i<timetableLen;i++{
+			if t.Timetable[i].CityCode == arrS.CityCode {
+				arrIdx = uint8(i)
+				if t.Timetable[i].StationCode == arrS.StationCode {
+					arrIdx = uint8(i)
+					break
+				}
+				continue
+			}
+			if depIdx < arrIdx && t.Timetable[i].CityCode != arrS.CityCode{
+				break
+			}
+		}
+		if depIdx >= arrIdx {
+			return
+		}
 	} else { // 城际车次
-		for i := 0; i < len(t.Timetable); i++ {
+		for i := 0; i < timetableLen; i++ {
 			if depI == -1 && t.Timetable[i].StationCode == depS.StationCode {
 				depI = i
 				depIdx = uint8(i)
+				continue
 			}
 			if depI != -1 && t.Timetable[i].StationCode == arrS.StationCode {
 				arrIdx = uint8(i)
-				ok = true
 				break
 			}
 		}
 	}
-	if !ok {
-		return
-	}
 	// 计算当前车次信息的出发站发车日期
 	date := queryDate.AddDate(0, 0, 1-t.Timetable[depIdx].DepTime.Day())
-	// 该发车日期不在有效时间段内，则返回false
-	if date.Before(t.EnableStartDate) || date.After(t.EnableEndDate) {
-		ok = false
-		return
-	}
-	ok = true
 	// 不是每天发车的车次，要判断发车日期是否有效
 	if t.ScheduleDays > 1 {
 		if date.Sub(t.EnableStartDate).Hours()/float64(24*t.ScheduleDays) != 0 {
-			ok = false
+			return
 		}
 	}
 	depDate = date.Format(constYmdFormat)
+	ok = true
 	return
 }
 

@@ -5,10 +5,11 @@ import (
 )
 
 // QueryResidualTicketInfo 获取所选出发日期中， 经过出发站、目的站的车次及其各类余票数量
-func QueryResidualTicketInfo(depStationName, arrStationName string, queryDate time.Time, isStudent bool) (result []string) {
+func QueryResidualTicketInfo(depStationName, arrStationName, depDate string, isStudent bool) (result []string) {
 	depS, arrS := getStationInfoByName(depStationName), getStationInfoByName(arrStationName)
 	matchTrans := getViaTrans(depS, arrS)
-	resultCh, count := make(chan *ResidualTicketInfo, 20), 0
+	queryDate, _ := time.Parse(constYmdFormat, depDate)
+	resultCh, count := make(chan *ResidualTicketInfo, len(matchTrans)), 0
 	for i := 0; i < len(matchTrans); i++ {
 		depIdx, arrIdx, depDate, ok := matchTrans[i].IsMatchQuery(depS, arrS, queryDate)
 		if !ok {

@@ -33,7 +33,7 @@ function query(){
             $(tag.tableBody).empty();
             for(var i=0; result != null && i<result.trans.length; i++){
                 var t = result.trans[i];
-                var tranNumLink = '<a href="/trans/detail?tranId=' + t.id + '">' + t.tranNum + '</a>';
+                var tranNumLink = '<a href="/admin/trans/detail?tranId=' + t.id + '">' + t.tranNum + '</a>';
                 var timetable = getTimeTableTd(t.timetable);
                 var start = new Date(t.enableStartDate).toLocaleDateString();
                 var end = new Date(t.enableEndDate).toLocaleDateString();

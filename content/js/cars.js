@@ -39,7 +39,7 @@ function query(){
             $(tag.tableBody).empty();
             for(var i=0; result != null && i<result.cars.length; i++){
                 var c = result.cars[i];
-                var carLink = '<a href="/cars/detail?carId=' + c.id + '" target="_black"><i class="fa fa-edit"></i></a>';
+                var carLink = '<a href="/admin/cars/detail?carId=' + c.id + '" target="_black"><i class="fa fa-edit"></i></a>';
                 var tranType = commonObj.tranTypeMap.get(c.tranType);
                 var seatType = commonObj.seatTypeMap.get(c.seatType);
                 var tr = '<tr><td>'+carLink+'</td><td>'+tranType+'</td><td>'+seatType+'</td><td>'+c.SeatCount

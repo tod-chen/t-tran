@@ -33,7 +33,7 @@ function query(){
             $(tag.tableBody).empty();
             for(var i=0; result != null && i<result.stations.length; i++){
                 var s = result.stations[i];
-                var stationLink = '<a href="/stations/detail?stationID=' + s.ID + '">' + s.StationName + '</a>';
+                var stationLink = '<a href="/admin/stations/detail?stationID=' + s.ID + '">' + s.StationName + '</a>';
                 var passenger = s.IsPassenger == 1 ? '是' : '否';
                 var tr = '<tr><td>'+stationLink+'</td><td>'+s.StationCode+'</td><td>'+passenger+'</td><td>'+s.CityCode
                     +'</td><td>'+s.CityName+'</td></tr>';

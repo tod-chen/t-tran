@@ -2,7 +2,6 @@ package modules
 
 import (
 	"fmt"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -71,7 +70,7 @@ func initScheduleCar() {
 // 初始化列车排班
 func initScheduleTran() {
 	start := time.Now()
-	goPool := initGoPool(350)
+	goPoolCompute := newGoPool(300)
 	scheduleTranMap = make(map[string]([]ScheduleTran), constDays)
 	now := time.Now()
 	y, m, d := now.Date()
@@ -81,14 +80,11 @@ func initScheduleTran() {
 	coll := session.DB(constMgoDB).C("tranSchedule")
 	var wg sync.WaitGroup
 	for idx := 0; idx < len(tranInfos); idx++ {
-		if idx%500 == 0 {
-			fmt.Println("begin init idx:", idx, ", tranNum:", tranInfos[idx].TranNum)
-		}
 		if !tranInfos[idx].IsSaleTicket {
 			continue
 		}
-		goPool.Take()
 		wg.Add(1)
+		goPoolCompute.Take()
 		go func(i int) {
 			start := today
 			if tranInfos[i].EnableStartDate.After(start) {
@@ -139,13 +135,17 @@ func initScheduleTran() {
 						panic(err)
 					}
 				}
+				// TODO: 下面这段代码导致mgo查询失败 row:128
+				// trans := scheduleTranMap[sTran.DepartureDate]
+				// trans = append(trans, *sTran)
+				// scheduleTranMap[sTran.DepartureDate] = trans
 			}
-			goPool.Return()
+			goPoolCompute.Return()
 			wg.Done()
 		}(idx)
 	}
 	wg.Wait()
-	goPool.Close()
+	goPoolCompute.Close()
 	fmt.Println("init scheduleTran complete, cost time:", time.Now().Sub(start).Seconds())
 }
 
@@ -175,14 +175,12 @@ func newResidualTicketInfo(t *TranInfo, depIdx, arrIdx uint8) *ResidualTicketInf
 		arrCode:  t.Timetable[arrIdx].StationCode,
 		arrTime:  t.Timetable[arrIdx].ArrTime.Format(constHmFormat),
 		costTime: t.Timetable[arrIdx].ArrTime.Sub(t.Timetable[depIdx].DepTime).String(),
-		// 初始化全部没有座位
-		seatCount: []int{-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
 	}
 	return r
 }
 
 func (r *ResidualTicketInfo) setScheduleInfo(st *ScheduleTran, isStudent bool) {
-	r.seatCount = *st.GetSeatCount(r.depIdx, r.arrIdx, isStudent)
+	r.seatCount = *st.GetAvaliableSeatCount(r.depIdx, r.arrIdx, isStudent)
 }
 
 // 结果转为字符串
@@ -220,11 +218,12 @@ type ScheduleTran struct {
 }
 
 func getScheduleTran(tranNum, date string) *ScheduleTran {
-	count := len(scheduleTranMap[date])
-	idx := sort.Search(count, func(i int) bool {
-		return scheduleTranMap[date][i].TranNum >= tranNum
-	})
-	return &scheduleTranMap[date][idx]
+	for i := 0; i < len(scheduleTranMap[date]); i++ {
+		if scheduleTranMap[date][i].TranNum == tranNum {
+			return &scheduleTranMap[date][i]
+		}
+	}
+	return nil
 }
 
 // Save 保存到数据库
@@ -246,8 +245,8 @@ func (st *ScheduleTran) setCarTypeIdxMap() {
 	}
 }
 
-// GetSeatCount 获取余票信息
-func (st *ScheduleTran) GetSeatCount(depIdx, arrIdx uint8, isStudent bool) *[]int {
+// GetAvaliableSeatCount 获取各席别余票数
+func (st *ScheduleTran) GetAvaliableSeatCount(depIdx, arrIdx uint8, isStudent bool) *[]int {
 	// 总共11类座次
 	result := []int{-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}
 	// 路段位标记

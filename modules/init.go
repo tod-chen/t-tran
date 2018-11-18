@@ -55,24 +55,6 @@ func init() {
 		panic(err)
 	}
 
-	if !db.HasTable(&Config{}) {
-		fmt.Println("create tables beginning")
-		defer fmt.Println("create tables end")
-		db.CreateTable(&Config{})
-		db.CreateTable(&Station{})
-		db.CreateTable(&TranInfo{})
-		db.CreateTable(&Route{})
-		db.CreateTable(&RoutePrice{})
-		db.CreateTable(&Car{})
-		db.CreateTable(&Seat{})
-		// db.CreateTable(&ScheduleTran{})
-		// db.CreateTable(&ScheduleCar{})
-		// db.CreateTable(&ScheduleSeat{})
-		db.CreateTable(&Order{})
-		db.CreateTable(&User{})
-		db.CreateTable(&Contact{})
-	}
-
 	initStation()
 	initTranInfo()
 	initSchedule()

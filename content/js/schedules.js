@@ -37,7 +37,7 @@ function query(){
             $(tag.tableBody).empty();
             for(var i=0; result != null && i<result.schedules.length; i++){
                 var s = result.schedules[i];
-                var scheduleLink = '<a href="/schedules/detail?scheduleID=' + s.id + '"><i class="fa fa-edit"></i></a>';
+                var scheduleLink = '<a href="/admin/schedules/detail?scheduleID=' + s.id + '"><i class="fa fa-edit"></i></a>';
                 var tr = '<tr><td>'+scheduleLink+'</td><td>'+s.departureDate+'</td><td>'+s.tranNum+'</td><td>'+s.saleTicketTime
                     +'</td><td>'+s.notSaleRemark+'</td></tr>';
                 $(tag.tableBody).append(tr);
