@@ -35,11 +35,26 @@ const (
 	constSeatTypeNoSeat              = "NST" // 无座
 )
 
+type tranCfgs []TranInfo
+
+func (t tranCfgs) Len() int {
+	return len(t)
+}
+func (t tranCfgs) Less(i, j int) bool {
+	if t[i].TranNum < t[j].TranNum {
+		return true
+	}
+	return t[i].EnableStartDate.Before(t[j].EnableStartDate)
+}
+func (t tranCfgs) Swap(i, j int) {
+	t[i], t[j] = t[j], t[i]
+}
+
 var (
 	// 所有车厢，存于内存，便于组装
 	carMap map[int](Car)
 	// 所有车次信息，不参与订票，用于查询列车的时刻表和各路段各座次的价格
-	tranInfos []TranInfo
+	tranInfos tranCfgs
 	// 各城市与经过该城市的列车映射
 	cityTranMap map[string]([]*TranInfo)
 )
@@ -61,6 +76,7 @@ func initCarMap() {
 	}
 	fmt.Println("init car map complete, cost time:", time.Now().Sub(start).Nanoseconds())
 }
+
 func initTranInfos() {
 	start := time.Now()
 	goPool := newGoPool(150)
@@ -79,6 +95,9 @@ func initTranInfos() {
 	}
 	wg.Wait()
 	goPool.Close()
+	if !sort.IsSorted(tranInfos) {
+		sort.Sort(tranInfos)
+	}
 	fmt.Println("init tran infos complete, cost time:", time.Now().Sub(start).Seconds())
 }
 func initCityTranMap() {
@@ -280,7 +299,7 @@ func (t *TranInfo) IsMatchQuery(depS, arrS *Station, queryDate time.Time) (depId
 	// 非城际车次
 	if !t.isIntercity() {
 		for i := 0; i < timetableLen-1; i++ {
-			if t.Timetable[i].CityCode == depS.CityCode{
+			if t.Timetable[i].CityCode == depS.CityCode {
 				depI = i
 				if t.Timetable[i].StationCode == depS.StationCode {
 					depI = i
@@ -292,7 +311,7 @@ func (t *TranInfo) IsMatchQuery(depS, arrS *Station, queryDate time.Time) (depId
 			}
 		}
 		depIdx = uint8(depI)
-		for i:=depI+1; i<timetableLen;i++{
+		for i := depI + 1; i < timetableLen; i++ {
 			if t.Timetable[i].CityCode == arrS.CityCode {
 				arrIdx = uint8(i)
 				if t.Timetable[i].StationCode == arrS.StationCode {
@@ -301,7 +320,7 @@ func (t *TranInfo) IsMatchQuery(depS, arrS *Station, queryDate time.Time) (depId
 				}
 				continue
 			}
-			if depIdx < arrIdx && t.Timetable[i].CityCode != arrS.CityCode{
+			if depIdx < arrIdx && t.Timetable[i].CityCode != arrS.CityCode {
 				break
 			}
 		}

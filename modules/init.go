@@ -58,6 +58,4 @@ func init() {
 	initStation()
 	initTranInfo()
 	initSchedule()
-
-	fmt.Println("init done...")
 }
