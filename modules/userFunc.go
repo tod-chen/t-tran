@@ -11,17 +11,17 @@ func QueryResidualTicketInfo(depStationName, arrStationName, depDate string, isS
 	queryDate, _ := time.Parse(constYmdFormat, depDate)
 	resultCh, count := make(chan *ResidualTicketInfo, len(matchTrans)), 0
 	for i := 0; i < len(matchTrans); i++ {
-		depIdx, arrIdx, depDate, ok := matchTrans[i].IsMatchQuery(depS, arrS, queryDate)
+		depIdx, arrIdx, tdate, ok := matchTrans[i].IsMatchQuery(depS, arrS, queryDate)
 		if !ok {
 			continue
 		}
 		count++
 		go func(t *TranInfo, depIdx, arrIdx uint8, date string) {
-			rti := newResidualTicketInfo(t, depIdx, arrIdx)
+			rti := newResidualTicketInfo(t, depIdx, arrIdx, date)
 			tran := getScheduleTran(t.TranNum, date)
 			rti.setScheduleInfo(tran, isStudent)
 			resultCh <- rti
-		}(matchTrans[i], depIdx, arrIdx, depDate)
+		}(matchTrans[i], depIdx, arrIdx, tdate)
 	}
 	result = make([]string, count)
 	for i := 0; i < count; i++ {

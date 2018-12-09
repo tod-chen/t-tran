@@ -74,15 +74,15 @@ func initCarMap() {
 		db.Where("car_id = ?", cars[i].ID).Find(&cars[i].Seats)
 		carMap[cars[i].ID] = cars[i]
 	}
-	fmt.Println("init car map complete, cost time:", time.Now().Sub(start).Nanoseconds())
+	fmt.Println("init car map complete, cost time:", time.Now().Sub(start).Seconds(), "(s)")
 }
 
 func initTranInfos() {
 	start := time.Now()
-	goPool := newGoPool(150)
+	goPool := newGoPool(100)
 	now, lastDay := time.Now(), time.Now().AddDate(0, 0, constDays)
 	today, lastDate := now.Format(constYmdFormat), lastDay.Format(constYmdFormat)
-	db.Where("enable_end_date >= ? and ? >= enable_start_date", today, lastDate).Order("tran_num, enable_start_date").Find(&tranInfos)
+	db.Where("enable_end_date >= ? and ? >= enable_start_date and tran_num like ?", today, lastDate, "Z2%").Order("tran_num, enable_start_date").Find(&tranInfos)
 	var wg sync.WaitGroup
 	for i := 0; i < len(tranInfos); i++ {
 		goPool.Take()
@@ -98,7 +98,7 @@ func initTranInfos() {
 	if !sort.IsSorted(tranInfos) {
 		sort.Sort(tranInfos)
 	}
-	fmt.Println("init tran infos complete, cost time:", time.Now().Sub(start).Seconds())
+	fmt.Println("init tran infos complete, cost time:", time.Now().Sub(start).Seconds(), "(s)")
 }
 func initCityTranMap() {
 	start := time.Now()
@@ -115,7 +115,7 @@ func initCityTranMap() {
 			cityTranMap[cityCode] = tranPtrs
 		}
 	}
-	fmt.Println("init city tran map complete, cost time:", time.Now().Sub(start).Nanoseconds())
+	fmt.Println("init city tran map complete, cost time:", time.Now().Sub(start).Seconds(), "(s)")
 }
 func getTranInfo(tranNum string, date time.Time) *TranInfo {
 	idx := sort.Search(len(tranInfos), func(i int) bool {
@@ -142,11 +142,11 @@ func getViaTrans(depS, arrS *Station) (result []*TranInfo) {
 	// 用map取经过出发站城市车次和目的站城市车次的交集
 	m := make(map[string](bool), len(depTrans))
 	for _, t := range depTrans {
-		m[t.TranNum+t.EnableStartDate.Format(constYmdFormat)] = false
+		m[t.TranNum+t.EnableStartDate.Format(constYmdFormat)] = true
 	}
 	for idx, t := range arrTrans {
 		// 属于交集，则放置结果集中
-		if _, ok := m[t.TranNum+t.EnableStartDate.Format(constYmdFormat)]; ok {
+		if _, exist := m[t.TranNum+t.EnableStartDate.Format(constYmdFormat)]; exist {
 			result = append(result, arrTrans[idx])
 		}
 	}
@@ -209,6 +209,7 @@ func (t *TranInfo) getScheduleCars() (sCars *[]ScheduleCar) {
 			carCount += count
 		}
 	}
+	routeCount := len(t.Timetable) - 1
 	result, carIdx := make([]ScheduleCar, carCount), uint8(0)
 	for id, count := range carIDCountMap {
 		sc := scheduleCarMap[id]
@@ -218,7 +219,7 @@ func (t *TranInfo) getScheduleCars() (sCars *[]ScheduleCar) {
 				CarNum:      carIdx + 1,
 				NoSeatCount: sc.NoSeatCount,
 				Seats:       sc.Seats,
-				EachRouteTravelerCount: sc.EachRouteTravelerCount,
+				EachRouteTravelerCount: make([]uint8, routeCount, routeCount), //sc.EachRouteTravelerCount,
 			}
 			carIdx++
 		}

@@ -34,7 +34,7 @@ var (
 	// 排班的车厢集
 	scheduleCarMap map[int](*ScheduleCar)
 	// 列车按日期安排表
-	scheduleTranMap map[string]([]ScheduleTran)
+	scheduleTranMap map[string](*ScheduleTran)
 )
 
 func isSameDay(src, tar time.Time) bool {
@@ -64,14 +64,14 @@ func initScheduleCar() {
 		}
 		scheduleCarMap[id] = &sc
 	}
-	fmt.Println("init schedule car complete, cost time:", time.Now().Sub(start).Nanoseconds())
+	fmt.Println("init schedule car complete, cost time:", time.Now().Sub(start).Seconds(), "(s)")
 }
 
 // 初始化列车排班
 func initScheduleTran() {
 	start := time.Now()
 	goPoolCompute := newGoPool(300)
-	scheduleTranMap = make(map[string]([]ScheduleTran), constDays)
+	scheduleTranMap = make(map[string](*ScheduleTran), constDays)
 	now := time.Now()
 	y, m, d := now.Date()
 	today := time.Date(y, m, d, 0, 0, 0, 0, time.Local)
@@ -114,12 +114,11 @@ func initScheduleTran() {
 			if tranInfos[i].EnableEndDate.Before(end) {
 				end = tranInfos[i].EnableEndDate
 			}
-			sTran := &ScheduleTran{
+			sTran := ScheduleTran{
 				TranNum:     tranInfos[i].TranNum,
 				Cars:        *tranInfos[i].getScheduleCars(),
 				FullSeatBit: countSeatBit(0, uint8(len(tranInfos[i].Timetable)-1)),
 			}
-			sTran.setCarTypeIdxMap()
 			for day := start; !day.After(end); day = day.AddDate(0, 0, tranInfos[i].ScheduleDays) {
 				y, M, d := day.Date()
 				h, m, s := tranInfos[i].SaleTicketTime.Clock()
@@ -131,13 +130,13 @@ func initScheduleTran() {
 				}
 				// 未找到，则新增一个
 				if count == 0 {
-					if err = coll.Insert(sTran); err != nil {
+					if err = coll.Insert(&sTran); err != nil {
 						panic(err)
 					}
 				}
 				// TODO: 下面这段代码导致mgo查询失败 row:128
 				// trans := scheduleTranMap[sTran.DepartureDate]
-				// trans = append(trans, *sTran)
+				// trans = append(trans, sTran)
 				// scheduleTranMap[sTran.DepartureDate] = trans
 			}
 			goPoolCompute.Return()
@@ -146,7 +145,7 @@ func initScheduleTran() {
 	}
 	wg.Wait()
 	goPoolCompute.Close()
-	fmt.Println("init scheduleTran complete, cost time:", time.Now().Sub(start).Seconds())
+	fmt.Println("init scheduleTran complete, cost time:", time.Now().Sub(start).Seconds(), "(s)")
 }
 
 // ResidualTicketInfo 余票信息结构
@@ -164,10 +163,10 @@ type ResidualTicketInfo struct {
 	remark    string    // 不售票的说明
 }
 
-func newResidualTicketInfo(t *TranInfo, depIdx, arrIdx uint8) *ResidualTicketInfo {
+func newResidualTicketInfo(t *TranInfo, depIdx, arrIdx uint8, date string) *ResidualTicketInfo {
 	r := &ResidualTicketInfo{
 		tranNum:  t.TranNum,
-		date:     t.Timetable[0].DepTime.Format(constYmdFormat),
+		date:     date,
 		depIdx:   depIdx,
 		depCode:  t.Timetable[depIdx].StationCode,
 		depTime:  t.Timetable[depIdx].DepTime,
@@ -218,12 +217,23 @@ type ScheduleTran struct {
 }
 
 func getScheduleTran(tranNum, date string) *ScheduleTran {
-	for i := 0; i < len(scheduleTranMap[date]); i++ {
-		if scheduleTranMap[date][i].TranNum == tranNum {
-			return &scheduleTranMap[date][i]
-		}
+	tran, exist := scheduleTranMap[date+tranNum]
+	if !exist {
+		session := getMgoSession()
+		defer session.Close()
+		coll := session.DB(constMgoDB).C("tranSchedule")
+		tran = &ScheduleTran{}
+		coll.Find(bson.M{"departureDate": date, "tranNum": tranNum}).One(tran)
+		tran.setCarTypeIdxMap()
+		scheduleTranMap[date+tranNum] = tran
 	}
-	return nil
+	return tran
+	// for i := 0; i < len(scheduleTranMap[date]); i++ {
+	// 	if scheduleTranMap[date][i].TranNum == tranNum {
+	// 		return &scheduleTranMap[date][i]
+	// 	}
+	// }
+	// return nil
 }
 
 // Save 保存到数据库
@@ -247,6 +257,7 @@ func (st *ScheduleTran) setCarTypeIdxMap() {
 
 // GetAvaliableSeatCount 获取各席别余票数
 func (st *ScheduleTran) GetAvaliableSeatCount(depIdx, arrIdx uint8, isStudent bool) *[]int {
+	fmt.Println("tranNum:", st.TranNum, ", depIdx:", depIdx, ", arrIdx:", arrIdx)
 	// 总共11类座次
 	result := []int{-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}
 	// 路段位标记
@@ -290,6 +301,7 @@ func (c *ScheduleCar) getNoSeatCount(depIdx, arrIdx uint8) uint8 {
 	// 旅途中当前车厢旅客最大数
 	var maxTravelerCountInRoute uint8
 	c.RLock()
+	fmt.Println(c.EachRouteTravelerCount)
 	for i := depIdx; i < arrIdx; i++ {
 		if c.EachRouteTravelerCount[i] > maxTravelerCountInRoute {
 			maxTravelerCountInRoute = c.EachRouteTravelerCount[i]
