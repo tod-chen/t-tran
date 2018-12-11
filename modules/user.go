@@ -2,33 +2,54 @@ package modules
 
 import (
 	"errors"
+	"time"
 )
 
 // Passenger 乘客
 type Passenger struct {
-	Name           string // 姓名
-	IsMale         bool   // 性别
-	Area           string // 国家地区
-	PaperworkType  uint8  // 证件类型
-	PaperworkNum   string // 证件号码
-	PaperworkValid bool   // 证件是否有效
-	PassengerType  uint8  // 乘客类型
-	PhoneNum       string // 手机号
-	TelNum         string // 固话
-	Email          string // 邮箱
-	Addr           string // 地址
-	ZipCode        string // 邮编
-	DBModel
+	ID            uint64
+	Name          string // 姓名
+	Gender        bool   // 性别
+	Area          string // 国家地区
+	PaperworkType uint8  // 证件类型
+	PaperworkNum  string // 证件号码
+	Status        uint8  // 乘客信息状态 0:待核验; 1:核验通过; 2:核验未通过; 3:黑名单; ...etc
+	PassengerType uint8  // 乘客类型
+	PhoneNum      string // 手机号
+	TelNum        string // 固话
+	Email         string // 邮箱
+	Addr          string // 地址
+	ZipCode       string // 邮编
+}
+
+// PassengerAdderMap 乘客添加者的映射关系表
+type PassengerAdderMap struct {
+	PID uint64 // 乘客ID
+	UID uint64 // 添加者ID
+}
+
+// TODO: Passenger 状态变更后，要通知所有添加者，同时变更对应的状态
+// func (p *Passager) StatusChanged(newStatus uint8) error
+
+// Approve 乘客信息核验通过
+func (p *Passenger) Approve() error {
+	p.Status = 1
+
+	return nil
+}
+
+// Disapprove 乘客信息核验未通过
+func (p *Passenger) Disapprove() error {
+	p.Status = 2
+	return nil
 }
 
 // User 注册用户
 type User struct {
-	UserName string `gorm:"type:nvarchar(50)"` //用户名
-	Password string `gorm:"type:varchar(50)"`  //密码
-	PhoneNumValid bool      // 手机号是否有效
-	EmailValid    bool      // 邮箱是否有效
-	Contacts      []Contact `gorm:"foreignkey:UserID"` // 联系人
-	Passenger
+	UserName  string    `gorm:"type:nvarchar(50)"` //用户名
+	Password  string    `gorm:"type:varchar(50)"`  //密码
+	LoginTime time.Time `gorm:"type:datetime"`     // 登录时间，可用于判断session超时
+	Passenger           // 注册用户也是乘客
 }
 
 // Register 注册
@@ -56,8 +77,17 @@ func (u *User) Edit() error {
 
 // Contact 常用联系人
 type Contact struct {
-	UserID uint `gorm:"index:main"` // 用户ID
-	Passenger
+	UserID    uint      `gorm:"index:main"` // 用户ID
+	Passenger           // 联系人是乘客
+	AddDate   time.Time // 添加的日期
+}
+
+// QueryContact 查询联系人
+// uid 用户ID
+// name 联系人姓名，模糊查询
+func QueryContact(uid uint64, name string) (list []Contact) {
+	db.Where("user_id = ? and name like ?", uid, "%"+name+"%").Find(&list)
+	return
 }
 
 // Add 添加联系人
