@@ -19,13 +19,12 @@ $(function(){
         param.tranType = $(tag.selTranType).val();
         param.page = 1;
         query();
-    })
-    
+    })    
 })
 
 function query(){
     $.ajax({
-        url:'/trans/query',
+        url:'/admin/trans/query',
         type:'GET',
         data:{tranNum:param.tranNum, tranType:param.tranType, page: param.page},
         dataType:'json',

@@ -38,7 +38,7 @@ function initData(){
     var id = getQueryString('carId');    
     if (id == null) return;
     $.ajax({
-        url:'/cars/getDetail',
+        url:'/admin/cars/getDetail',
         type:'GET',
         dataType:'json',
         data:{carId:id},
@@ -96,7 +96,7 @@ function initEvent(){
         setSeatSumInfo();
     })
     $(tag.btnCancel).click(function(){
-        window.location.href = '/cars';
+        window.location.href = '/admin/cars';
     });
     $(tag.btnSave).click(function(){
         save();    
@@ -130,7 +130,7 @@ function save(){
         carDetail.seats.push({seatNum:num, isStudent:ck});
     });
     $.ajax({
-        url:'/car/save',
+        url:'/admin/car/save',
         type:'POST',
         dataType:'json',
         data:JSON.stringify(carDetail),

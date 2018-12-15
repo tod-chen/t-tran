@@ -25,7 +25,7 @@ $(function(){
 
 function query(){
     $.ajax({
-        url:'/stations/query',
+        url:'/admin/stations/query',
         type:'GET',
         data:{stationName:param.stationName, cityName:param.cityName, page: param.page},
         dataType:'json',

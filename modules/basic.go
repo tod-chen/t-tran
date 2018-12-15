@@ -155,7 +155,7 @@ func getViaTrans(depS, arrS *Station) (result []*TranInfo) {
 
 // TranInfo 列车信息结构体 ===============================start
 type TranInfo struct {
-	ID                int
+	ID                int       `json:"id"`
 	TranNum           string    `gorm:"index:main;type:varchar(10)" json:"tranNum"` // 车次号
 	RouteDepCrossDays int       `json:"durationDays"`                               // 路段出发跨天数：最后一个路段的发车时间与起点站发车时间的间隔天数
 	ScheduleDays      int       `gorm:"default:1" json:"scheduleDays"`              // 间隔多少天发一趟车，绝大多数是1天
@@ -404,7 +404,7 @@ type RoutePrice struct {
 
 // Car 车厢信息结构体
 type Car struct {
-	ID          int
+	ID          int    `json:"id"`
 	TranType    string `gorm:"type:varchar(20)" json:"tranType"` // 车次类型 高铁、动车、直达等
 	SeatType    string `gorm:"type:varchar(5)" json:"seatType"`  // 车厢的座位类型
 	SeatCount   uint8  // 车厢内座位数(或床位数)

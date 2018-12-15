@@ -15,7 +15,7 @@ $(function(){
 function initDOM(){
     tag.scheduleId = parseInt(getQueryString('scheduleID'));
     $.ajax({
-        url:'/schedules/getDetail',
+        url:'/admin/schedules/getDetail',
         type:'GET',
         dataType:'json',
         data:{scheduleID: tag.scheduleId},
@@ -41,7 +41,7 @@ function initEvent(){
             notSaleRemark: $(tag.notSaleRemark).val()
         };
         $.ajax({
-            url:'/schedules/save',
+            url:'/admin/schedules/save',
             type:'POST',
             dataType:'json',
             data: JSON.stringify(param),

@@ -32,7 +32,7 @@ function initData(){
         return;
     }
     $.ajax({
-        url:'/trans/getDetail',
+        url:'/admin/trans/getDetail',
         type:'GET',
         dataType:'json',
         data:{tranId:id},
@@ -119,7 +119,7 @@ function setCars(tranNum, carIds){
         tranType = 'O';
     }
     $.ajax({
-        url:'/cars/query',
+        url:'/admin/cars/query',
         type:'GET',
         dataType:'json',
         data:{tranType:tranType},
@@ -220,7 +220,7 @@ function initEvent(){
     })
     $(tag.btnSave).click(save)
     $(tag.btnCancel).click(function(){
-
+        window.location.href = '/admin/trans';
     })
 }
 
@@ -301,7 +301,7 @@ function save(){
         return;
     }
     $.ajax({
-        url:'/tran/save',
+        url:'/admin/tran/save',
         type:'POST',
         dataType:'json',
         data:JSON.stringify(data),

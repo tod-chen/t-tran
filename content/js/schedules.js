@@ -29,7 +29,7 @@ $(function(){
 
 function query(){
     $.ajax({
-        url:'/schedules/query',
+        url:'/admin/schedules/query',
         type:'GET',
         data:{depDate:param.departureDate, tranNum:param.tranNum, page: param.page},
         dataType:'json',

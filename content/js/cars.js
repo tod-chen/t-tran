@@ -31,7 +31,7 @@ $(function(){
 
 function query(){
     $.ajax({
-        url:'/cars/query',
+        url:'/admin/cars/query',
         type:'GET',
         data:{seatType:param.seatType, tranType:param.tranType, page: param.page},
         dataType:'json',
