@@ -105,6 +105,7 @@ func initTranInfos() {
 	}
 	fmt.Println("init tran infos complete, cost time:", time.Now().Sub(start).Seconds(), "(s)")
 }
+
 func initCityTranMap() {
 	start := time.Now()
 	cityTranMap = make(map[string]([]*TranInfo), constCityCount)
@@ -122,6 +123,7 @@ func initCityTranMap() {
 	}
 	fmt.Println("init city tran map complete, cost time:", time.Now().Sub(start).Seconds(), "(s)")
 }
+
 func getTranInfo(tranNum string, date time.Time) *TranInfo {
 	idx := sort.Search(len(tranInfos), func(i int) bool {
 		if tranInfos[i].TranNum < tranNum ||
@@ -133,6 +135,7 @@ func getTranInfo(tranNum string, date time.Time) *TranInfo {
 	})
 	return &tranInfos[idx]
 }
+
 func getViaTrans(depS, arrS *Station) (result []*TranInfo) {
 	// 获取经过出发站所在城市的所有车次
 	depTrans, exist := cityTranMap[depS.CityCode]
@@ -183,6 +186,7 @@ type TranInfo struct {
 func (t *TranInfo) isIntercity() bool {
 	return strings.Index(t.TranNum, "C") == 0
 }
+
 func (t *TranInfo) getFullInfo() {
 	// 获取时刻表信息
 	db.Where("tran_id = ?", t.ID).Order("station_index").Find(&t.Timetable)
@@ -203,6 +207,7 @@ func (t *TranInfo) getFullInfo() {
 		}
 	}
 }
+
 func (t *TranInfo) getScheduleCars() (sCars *[]ScheduleCar) {
 	// 获取车厢信息
 	carSettings, carCount := strings.Split(t.CarIds, ";"), 0

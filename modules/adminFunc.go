@@ -35,7 +35,7 @@ func GetCarDetail(carID int) (c Car) {
 
 // QuerySchedule 查询排班信息
 func QuerySchedule(departureDate, tranNum string, page, pageSize int) (schedules []ScheduleTran, count int) {
-	
+
 	q := db.Table("schedule_trans").Where("departure_date = ? and tran_num like ?", departureDate, "%"+tranNum+"%").Count(&count)
 	q.Order("tran_num").Offset((page - 1) * pageSize).Limit(pageSize).Find(&schedules)
 	return

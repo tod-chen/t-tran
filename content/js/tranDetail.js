@@ -137,19 +137,19 @@ function setCars(tranNum, carIds){
                 stEle.append(op);
             }
             var ids = carIds.split(';');
-            for(var i=0;i<ids.length;i++){
+            for(var i=0;i<ids.length;i++) {
                 $(tag.carsContent + ' .cb').before($(tag.carItemTpl).html());
-                var ic = ids[i].split('-');
-                var carEle = $(tag.carsContent + ' .car-item:eq('+i+')');
-                carEle.find('[name="carID"]').val(ic[0]);
-                carEle.find('[name="carCount"]').val(ic[1]);
+                var ic = ids[i].split(':');
+                var carEle = $(tag.carsContent + ' .car-item').eq(i);
+                carEle.find('select[name="carID"]').val(ic[0]);
+                carEle.find('select[name="carCount"]').val(ic[1]);
             }
             setCarSumInfo();
         }
     })
 }
 
-function setCarSumInfo(){
+function setCarSumInfo() {
     var count = 0;
     $(tag.carsContent + ' input[name="carCount"]').each(function(){
         var c = parseInt($(this).val());
@@ -159,7 +159,7 @@ function setCarSumInfo(){
 }
 
 // 初始化事件
-function initEvent(){
+function initEvent() {
     $(tag.btnAddTimetable).click(function(){
         $(this).parent().before('<li><a><span class="timetable-idx"></span><span class="timetable-stationName"></span><i></i></a></li>');
         $(tag.timetableContent).append($(tag.timetableItemTpl).html());
@@ -227,23 +227,23 @@ function initEvent(){
 // 验证数据有效性
 function validData(){
     var data = {
-        id : parseInt($(tag.tranId).val()),
-        tranNum:$(tag.tranNum).val(),
-        durationDay:parseInt($(tag.durationDay).val()),
-        scheduleDay:parseInt($(tag.scheduleDay).val()),
-        isHighPriority:parseInt($(tag.isHighPriority).val()),
+        id: parseInt($(tag.tranId).val()),
+        tranNum: $(tag.tranNum).val(),
+        durationDay: parseInt($(tag.durationDay).val()),
+        scheduleDay: parseInt($(tag.scheduleDay).val()),
+        isHighPriority: parseInt($(tag.isHighPriority).val()),
         enableStartDate: new Date($(tag.enableSD).val()).toISOString(),
         enableEndDate: new Date($(tag.enableED).val()).toISOString(),
         timetable: new Array(),
-        carIds:'',
-        seatPriceMap:new Map()
+        carIds: '',
+        seatPriceMap: new Map()
     };
     $(tag.timetableContent + '>div').each(function(){
         var route = {
-            stationName:$(this).find('input[name="stationName"]').val(),
-            arrTime:$(this).find('input[name="arrTime"]').val(),
-            depTime:$(this).find('input[name="depTime"]').val(),
-            checkTicketGate:$(this).find('input[name="checkTicketGate"]').val(),
+            stationName: $(this).find('input[name="stationName"]').val(),
+            arrTime: $(this).find('input[name="arrTime"]').val(),
+            depTime: $(this).find('input[name="depTime"]').val(),
+            checkTicketGate: $(this).find('input[name="checkTicketGate"]').val(),
             platform: parseInt($(this).find('input[name="platform"]').val()),
             maleageNext: parseFloat($(this).find('input[name="maleageNext"]').val()),
         };
