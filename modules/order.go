@@ -29,10 +29,10 @@ var (
 // 判断用户当天取消订单的次数是否已达上限
 func isCancelTimesInLimit(userID uint) bool {
 	lg, times := len(unpayOrders), 0
-	date := time.Now().Format(constYmdFormat)
+	date := time.Now().Format(ConstYmdFormat)
 	for i := 0; i < lg; i++ {
 		if unpayOrders[i].UserID == userID &&
-			unpayOrders[i].BookTime.Format(constYmdFormat) == date &&
+			unpayOrders[i].BookTime.Format(ConstYmdFormat) == date &&
 			unpayOrders[i].Status == constOrderStatusCancelled {
 
 			times++
@@ -153,7 +153,7 @@ func SubmitOrder(tranNum string, date time.Time, depIdx, arrIdx uint8, userID, c
 		return errors.New("乘车人时间冲突")
 	}
 
-	scheduleTran := getScheduleTran(tranNum, date.Format(constYmdFormat))
+	scheduleTran := getScheduleTran(tranNum, date.Format(ConstYmdFormat))
 	// 锁定座位，创建订单
 	carLen := len(scheduleTran.Cars)
 	var s *ScheduleSeat
@@ -308,7 +308,7 @@ func (o *Order) Change(tranNum string, date time.Time, depIdx, arrIdx uint8, use
 		return errors.New("乘车人时间冲突")
 	}
 
-	scheduleTran := getScheduleTran(tranNum, date.Format(constYmdFormat))
+	scheduleTran := getScheduleTran(tranNum, date.Format(ConstYmdFormat))
 	// 锁定座位，创建订单
 	carLen := len(scheduleTran.Cars)
 	var s *ScheduleSeat

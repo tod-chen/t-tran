@@ -10,7 +10,7 @@ func checkTicket() {
 	date := time.Now()
 	for _, t := range tranInfos {
 		for i := -1; i < constDays; i++ {
-			dateStr := date.AddDate(0, 0, i).Format(constYmdFormat)
+			dateStr := date.AddDate(0, 0, i).Format(ConstYmdFormat)
 			checkTranTicket(t.TranNum, dateStr)
 		}
 	}
@@ -28,7 +28,7 @@ func checkTranTicket(tranNum, date string) {
 		}
 	}
 	st := getScheduleTran(tranNum, date)
-	t, _ := time.Parse(constYmdFormat, date)
+	t, _ := time.Parse(ConstYmdFormat, date)
 	tran := getTranInfo(tranNum, t)
 	for ci := 0; ci < len(st.Cars); ci++ {
 		orderEachRouteTrvalerCount := make([]uint8, len(st.Cars[ci].EachRouteTravelerCount))

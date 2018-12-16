@@ -8,7 +8,7 @@ import (
 func QueryResidualTicketInfo(depStationName, arrStationName, depDate string, isStudent bool) (result []string) {
 	depS, arrS := getStationInfoByName(depStationName), getStationInfoByName(arrStationName)
 	matchTrans := getViaTrans(depS, arrS)
-	queryDate, _ := time.Parse(constYmdFormat, depDate)
+	queryDate, _ := time.Parse(ConstYmdFormat, depDate)
 	resultCh, count := make(chan *ResidualTicketInfo, len(matchTrans)), 0
 	for i := 0; i < len(matchTrans); i++ {
 		depIdx, arrIdx, tdate, ok := matchTrans[i].IsMatchQuery(depS, arrS, queryDate)
@@ -42,9 +42,17 @@ type TimetableResult struct {
 // QueryTimetable 查询时刻表
 func QueryTimetable(tranNum string, date time.Time) (result []TimetableResult) {
 	tran := getTranInfo(tranNum, date)
-	result = make([]TimetableResult, len(tran.Timetable))
-	for _, v := range tran.Timetable {
+	result = make([]TimetableResult, 0, len(tran.Timetable))
+	for i, v := range tran.Timetable {
 		r := TimetableResult{Name: v.StationName, DepTime: v.getStrDepTime(), ArrTime: v.getStrArrTime(), StayTime: v.getStrStayTime()}
+		if i == 0 {
+			r.ArrTime = ConstStrNullTime
+			r.StayTime = ConstStrNullTime
+		}
+		if i == len(tran.Timetable)-1 {
+			r.DepTime = ConstStrNullTime
+			r.StayTime = ConstStrNullTime
+		}
 		result = append(result, r)
 	}
 	return

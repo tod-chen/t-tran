@@ -122,7 +122,7 @@ func initScheduleTran() {
 			for day := start; !day.After(end); day = day.AddDate(0, 0, tranInfos[i].ScheduleDays) {
 				y, M, d := day.Date()
 				h, m, s := tranInfos[i].SaleTicketTime.Clock()
-				sTran.DepartureDate = day.Format(constYmdFormat)
+				sTran.DepartureDate = day.Format(ConstYmdFormat)
 				sTran.SaleTicketTime = time.Date(y, M, d-constDays, h, m, s, 0, time.Local)
 				count, err := coll.Find(bson.M{"departureDate": sTran.DepartureDate, "tranNum": sTran.TranNum}).Count()
 				if err != nil {
@@ -172,7 +172,7 @@ func newResidualTicketInfo(t *TranInfo, depIdx, arrIdx uint8, date string) *Resi
 		depTime:  t.Timetable[depIdx].DepTime,
 		arrIdx:   arrIdx,
 		arrCode:  t.Timetable[arrIdx].StationCode,
-		arrTime:  t.Timetable[arrIdx].ArrTime.Format(constHmFormat),
+		arrTime:  t.Timetable[arrIdx].ArrTime.Format(ConstHmFormat),
 		costTime: t.Timetable[arrIdx].ArrTime.Sub(t.Timetable[depIdx].DepTime).String(),
 	}
 	return r
@@ -185,7 +185,7 @@ func (r *ResidualTicketInfo) setScheduleInfo(st *ScheduleTran, isStudent bool) {
 // 结果转为字符串
 func (r *ResidualTicketInfo) toString() string {
 	list := []string{r.tranNum, r.date,
-		strconv.Itoa(int(r.depIdx)), r.depCode, r.depTime.Format(constHmFormat),
+		strconv.Itoa(int(r.depIdx)), r.depCode, r.depTime.Format(ConstHmFormat),
 		strconv.Itoa(int(r.arrIdx)), r.arrCode, r.arrTime, r.costTime}
 	countList := make([]string, 12)
 	count := 0

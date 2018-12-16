@@ -2,6 +2,7 @@ package web
 
 import (
 	"net/http"
+	"strconv"
 	"t-tran/modules"
 	"time"
 
@@ -18,8 +19,12 @@ func setUserRouter(g *gin.RouterGroup) {
 	g.POST("/login", login)
 	// 登出
 	g.POST("/logout", logout)
-	// 车次及余票查询
+	// 查询车次及余票
 	g.GET("/residualTicket", queryResidualTicket)
+	// 查询时刻表
+	g.GET("/queryTimetable", queryTimetable)
+	// 查询票价
+	g.GET("/queryPrice", queryPrice)
 }
 
 func login(c *gin.Context) {
@@ -45,13 +50,21 @@ func queryResidualTicket(c *gin.Context) {
 }
 
 // 查询时刻表
-func queryTimetable(tranNum string, date time.Time) []modules.TimetableResult {
-	return modules.QueryTimetable(tranNum, date)
+func queryTimetable(c *gin.Context) {
+	tranNum, date := c.Query("tranNum"), c.Query("date")
+	t, _ := time.Parse(modules.ConstYmdFormat, date)
+	c.JSON(http.StatusOK, gin.H{"timetable": modules.QueryTimetable(tranNum, t)})
 }
 
 // 查询票价
-func queryPrice(tranNum string, date time.Time, depIdx, arrIdx uint8) map[string]float32 {
-	return modules.QuerySeatPrice(tranNum, date, depIdx, arrIdx)
+func queryPrice(c *gin.Context) {
+	tranNum, date := c.Query("tranNum"), c.Query("date")
+	t, _ := time.Parse(modules.ConstYmdFormat, date)
+	dep, arr := c.Query("depIdx"), c.Query("arrIdx")
+	depI, _ := strconv.Atoi(dep)
+	arrI, _ := strconv.Atoi(arr)
+	depIdx, arrIdx := uint8(depI), uint8(arrI)
+	c.JSON(http.StatusOK, gin.H{"price": modules.QuerySeatPrice(tranNum, t, depIdx, arrIdx)})
 }
 
 // 提交订单

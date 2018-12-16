@@ -10,13 +10,18 @@ import (
 )
 
 const (
-	// 时间格式
-	constHmFormat     = "15:04"               // 时间格式 小时:分钟
-	constHmsFormat    = "15:04:05"            // 时间格式 小时:分钟:秒
-	constYmdFormat    = "2006-01-02"          // 时间格式 年-月-日
-	constYMdHmFormat  = "2006-01-02 15:04"    // 时间格式 年-月-日 小时:分钟
-	constYMdHmsFormat = "2006-01-02 15:04:05" // 时间格式 年-月-日 小时:分钟:秒
-	constStrNullTime  = "----"
+	// ConstHmFormat 时间格式 小时:分钟
+	ConstHmFormat = "15:04"
+	// ConstHmsFormat 时间格式 小时:分钟:秒
+	ConstHmsFormat = "15:04:05"
+	// ConstYmdFormat 时间格式 年-月-日
+	ConstYmdFormat = "2006-01-02"
+	// ConstYMdHmFormat 时间格式 年-月-日 小时:分钟
+	ConstYMdHmFormat = "2006-01-02 15:04"
+	// ConstYMdHmsFormat 时间格式 年-月-日 小时:分钟:秒
+	ConstYMdHmsFormat = "2006-01-02 15:04:05"
+	// ConstStrNullTime 时刻表出发和到站时间为空时的字符串
+	ConstStrNullTime = "----"
 
 	constOneDayDuration = 24 * time.Hour // 一天的长度
 	constTranCount      = 13000          // 车次数量
@@ -81,7 +86,7 @@ func initTranInfos() {
 	start := time.Now()
 	goPool := newGoPool(100)
 	now, lastDay := time.Now(), time.Now().AddDate(0, 0, constDays)
-	today, lastDate := now.Format(constYmdFormat), lastDay.Format(constYmdFormat)
+	today, lastDate := now.Format(ConstYmdFormat), lastDay.Format(ConstYmdFormat)
 	db.Where("enable_end_date >= ? and ? >= enable_start_date and tran_num like ?", today, lastDate, "Z2%").Order("tran_num, enable_start_date").Find(&tranInfos)
 	var wg sync.WaitGroup
 	for i := 0; i < len(tranInfos); i++ {
@@ -119,9 +124,12 @@ func initCityTranMap() {
 }
 func getTranInfo(tranNum string, date time.Time) *TranInfo {
 	idx := sort.Search(len(tranInfos), func(i int) bool {
-		return tranInfos[i].TranNum == tranNum &&
-			tranInfos[i].EnableStartDate.Before(date) &&
-			tranInfos[i].EnableEndDate.After(date)
+		if tranInfos[i].TranNum < tranNum ||
+			tranInfos[i].EnableEndDate.Before(date) ||
+			tranInfos[i].EnableStartDate.After(date) {
+			return false
+		}
+		return true
 	})
 	return &tranInfos[idx]
 }
@@ -142,11 +150,11 @@ func getViaTrans(depS, arrS *Station) (result []*TranInfo) {
 	// 用map取经过出发站城市车次和目的站城市车次的交集
 	m := make(map[string](bool), len(depTrans))
 	for _, t := range depTrans {
-		m[t.TranNum+t.EnableStartDate.Format(constYmdFormat)] = true
+		m[t.TranNum+t.EnableStartDate.Format(ConstYmdFormat)] = true
 	}
 	for idx, t := range arrTrans {
 		// 属于交集，则放置结果集中
-		if _, exist := m[t.TranNum+t.EnableStartDate.Format(constYmdFormat)]; exist {
+		if _, exist := m[t.TranNum+t.EnableStartDate.Format(ConstYmdFormat)]; exist {
 			result = append(result, arrTrans[idx])
 		}
 	}
@@ -280,6 +288,7 @@ func (t *TranInfo) initTimetable() {
 
 // 根据起止站获取各类座位的票价
 func (t *TranInfo) getSeatPrice(depIdx, arrIdx uint8) (result map[string]float32) {
+	result = make(map[string]float32)
 	for seatType, eachRoutePrice := range t.SeatPriceMap {
 		var price float32
 		for i := depIdx; i < arrIdx; i++ {
@@ -349,7 +358,7 @@ func (t *TranInfo) IsMatchQuery(depS, arrS *Station, queryDate time.Time) (depId
 			return
 		}
 	}
-	depDate = date.Format(constYmdFormat)
+	depDate = date.Format(ConstYmdFormat)
 	ok = true
 	return
 }
@@ -373,24 +382,15 @@ type Route struct {
 }
 
 func (r *Route) getStrDepTime() string {
-	if r.DepTime.Year() == 1 {
-		return constStrNullTime
-	}
-	return r.DepTime.Format(constHmFormat)
+	return r.DepTime.Format(ConstHmFormat)
 }
 
 func (r *Route) getStrArrTime() string {
-	if r.ArrTime.Year() == 1 {
-		return constStrNullTime
-	}
-	return r.ArrTime.Format(constHmFormat)
+	return r.ArrTime.Format(ConstHmFormat)
 }
 
 func (r *Route) getStrStayTime() string {
-	if r.DepTime.Year() == 1 || r.ArrTime.Year() == 1 {
-		return constStrNullTime
-	}
-	return strconv.FormatFloat(r.DepTime.Sub(r.ArrTime).Minutes(), 'e', 0, 64)
+	return strconv.FormatFloat(r.DepTime.Sub(r.ArrTime).Minutes(), 'f', 0, 64)
 }
 
 // RoutePrice 各路段价格
