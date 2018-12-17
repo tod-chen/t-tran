@@ -75,18 +75,18 @@ function initData(){
                 carIdCountMap.set(parseInt(id_count[0]), parseInt(id_count[1]));
             }
             // 设置各路段价格
+            for(var p in t.seatPriceMap){
+                var seatName = commonObj.seatTypeMap.get(p);
+                $('th.route').parent().append('<th data-seatType="' + p + '">' + seatName + '</th>');
+            }
             var rt = t.timetable;
             for(var i=0;i<rt.length-1;i++){
-                var tr = '<tr data-routeIdx="'+i+'"><td class="route">'+ rt[i].stationName + '&nbsp;->&nbsp;' + rt[i+1].stationName +'</td></tr>';
-                $(tag.routePriceTableBody).append(tr);
-            }
-            for(var i=0;i<t.seatPriceMap.length;i++){
-                var seatName = commonObj.seatTypeMap.get(t.seatPriceMap[i].key);
-                $('th.route').parent().append('<th data-seatType="'+t.seatPriceMap[i].key+'">' + seatName + '</th>');
-                for(var j=0;j<t.seatPriceMap[i].value.length;j++){
-                    $('td[data-routeIdx="'+j+'"]').append('<td data-seatType="'+t.seatPriceMap[i].key
-                    +'"><input type="number" value="'+t.seatPriceMap[i].value[j]+'" /></td>');
+                var tr = '<tr data-routeIdx="'+i+'"><td class="route">'+ rt[i].stationName + '&nbsp;->&nbsp;' + rt[i+1].stationName +'</td>';
+                for(var p in t.seatPriceMap){
+                    tr += '<td data-seatType="' + p + '"><input type="number" value="' + t.seatPriceMap[p][i] + '" /></td>';
                 }
+                tr += '</tr>';
+                $(tag.routePriceTableBody).append(tr);
             }
         }
     })
@@ -138,11 +138,11 @@ function setCars(tranNum, carIds){
             }
             var ids = carIds.split(';');
             for(var i=0;i<ids.length;i++) {
-                $(tag.carsContent + ' .cb').before($(tag.carItemTpl).html());
+                $(tag.carsContent).append($(tag.carItemTpl).html());
                 var ic = ids[i].split(':');
-                var carEle = $(tag.carsContent + ' .car-item').eq(i);
-                carEle.find('select[name="carID"]').val(ic[0]);
-                carEle.find('select[name="carCount"]').val(ic[1]);
+                var carEle = $(tag.carsContent + ' .car-item:eq('+i+')');
+                carEle.find('select[name=carId]').val(ic[0]);
+                carEle.find('input[name=carCount]').val(ic[1]);
             }
             setCarSumInfo();
         }

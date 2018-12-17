@@ -195,9 +195,10 @@ func (t *TranInfo) getFullInfo() {
 	t.SeatPriceMap = make(map[string]([]float32), 3)
 	var routePrices []RoutePrice
 	db.Where("tran_id = ?", t.ID).Order("seat_type, route_index").Find(&routePrices)
-	for start, end := 0, 1; end < len(routePrices); end++ {
-		if end == len(routePrices)-1 || routePrices[start].SeatType != routePrices[end].SeatType {
-			arr := routePrices[start:end]
+	count := len(routePrices)
+	for start, end := 0, 1; end < count; end++ {
+		if end == count-1 || routePrices[start].SeatType != routePrices[end].SeatType {
+			arr := routePrices[start : end+1]
 			prices := make([]float32, len(arr))
 			for idx, rp := range arr {
 				prices[idx] = rp.Price

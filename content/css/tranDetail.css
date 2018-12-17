@@ -20,6 +20,12 @@
     display: inline-flex;
 }
 
+#cars-content:after{
+    content:'';
+    display: block;
+    clear: both;
+}
+
 .car-item{
     width:48%;
     margin: 5px 1%;
@@ -30,5 +36,5 @@
     width: 16%;
 }
 .car-item i{
-    margin:8px 0 0 5px;
+    margin:6px 0 0 6px;
 }

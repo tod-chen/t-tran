@@ -22,45 +22,45 @@ type Passenger struct {
 	ZipCode       string // 邮编
 }
 
+// Register 注册
+func (p *Passenger) Register(userName, password string) error {
+	count := 0
+	db.Model(&Passenger{}).Where("paperwork_num = ? and paperwork_type = ? and paperwork_valid = 1", p.PaperworkNum, p.PaperworkType).Count(&count)
+	if count != 0 {
+		return errors.New("证件信息已存在")
+	}
+	db.Model(&User{}).Where("user_name = ?", userName).Count(&count)
+	if count != 0 {
+		return errors.New("用户名已被注册")
+	}
+	db.Create(p)
+	u := &User{ID: p.ID, UserName: userName, Password: password}
+	db.Create(u)
+	return nil
+}
+
+// StatusChanged 状态变更后，要通知所有添加者，同时变更对应的状态
+func (p *Passenger) StatusChanged(newStatus uint8) error {
+	var adders []PassengerAdderMap
+	db.Where("pid = ?", p.ID).Find(&adders)
+	for _, item := range adders {
+		db.Model(&Contact{}).Where("user_id = ? and passenger_id = ?", item.UID, item.PID).Update("status", newStatus)
+	}
+	return nil
+}
+
 // PassengerAdderMap 乘客添加者的映射关系表
 type PassengerAdderMap struct {
 	PID uint64 // 乘客ID
-	UID uint64 // 添加者ID
-}
-
-// TODO: Passenger 状态变更后，要通知所有添加者，同时变更对应的状态
-// func (p *Passager) StatusChanged(newStatus uint8) error
-
-// Approve 乘客信息核验通过
-func (p *Passenger) Approve() error {
-	p.Status = 1
-
-	return nil
-}
-
-// Disapprove 乘客信息核验未通过
-func (p *Passenger) Disapprove() error {
-	p.Status = 2
-	return nil
+	UID uint64 // 添加者ID(用户ID)
 }
 
 // User 注册用户
 type User struct {
+	ID        uint64    `gorm:"type:int(10) unsigned"`
 	UserName  string    `gorm:"type:nvarchar(50)"` //用户名
 	Password  string    `gorm:"type:varchar(50)"`  //密码
 	LoginTime time.Time `gorm:"type:datetime"`     // 登录时间，可用于判断session超时
-	Passenger           // 注册用户也是乘客
-}
-
-// Register 注册
-func (u *User) Register() error {
-	count := 0
-	db.Model(&User{}).Where("(user_name = ? or (paperwork_num = ? and paperwork_type = ?)) and paperwork_valid = 1", u.UserName, u.PaperworkNum, u.PaperworkType).Count(&count)
-	if count != 0 {
-		return errors.New("用户名或证件信息已存在")
-	}
-	db.Create(u)
-	return nil
 }
 
 // ChangePwd 修改密码
