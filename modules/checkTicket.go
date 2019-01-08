@@ -29,7 +29,10 @@ func checkTranTicket(tranNum, date string) {
 	}
 	st := getScheduleTran(tranNum, date)
 	t, _ := time.Parse(ConstYmdFormat, date)
-	tran := getTranInfo(tranNum, t)
+	tran, exist := getTranInfo(tranNum, t)
+	if !exist{
+		return
+	}
 	for ci := 0; ci < len(st.Cars); ci++ {
 		orderEachRouteTrvalerCount := make([]uint8, len(st.Cars[ci].EachRouteTravelerCount))
 		for _, o := range list {

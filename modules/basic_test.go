@@ -14,7 +14,7 @@ func TestStructTranInfo(t *testing.T) {
 		t.Error("trans info fail")
 	}
 
-	if sort.IsSorted(trans(tranInfos)) {
+	if sort.IsSorted(tranCfgs(tranInfos)) {
 		t.Log("trans sorted pass")
 	} else {
 		t.Error("trans sorted fail")
@@ -32,8 +32,8 @@ func TestStructTranInfo(t *testing.T) {
 		t.Error("city tran map key fail")
 	}
 
-	tran := getTranInfo("C2222", time.Now())
-	if len(tran.Timetable) == 3 &&
+	tran, ok := getTranInfo("C2222", time.Now())
+	if ok && len(tran.Timetable) == 3 &&
 		tran.Timetable[0].StationName == "天津" &&
 		tran.Timetable[2].StationName == "北京南" {
 		t.Log("getTranInfo pass")
@@ -90,8 +90,8 @@ func TestStructTranInfo(t *testing.T) {
 }
 
 func TestStructRoute(t *testing.T) {
-	dt, _ := time.Parse(constYMdHmsFormat, "2018-01-01 13:08:00")
-	at, _ := time.Parse(constYMdHmsFormat, "2018-01-01 13:03:00")
+	dt, _ := time.Parse(ConstYMdHmsFormat, "2018-01-01 13:08:00")
+	at, _ := time.Parse(ConstYMdHmsFormat, "2018-01-01 13:03:00")
 	r := &Route {
 		DepTime: dt,
 		ArrTime: at,

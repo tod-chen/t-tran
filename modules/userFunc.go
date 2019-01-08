@@ -41,7 +41,10 @@ type TimetableResult struct {
 
 // QueryTimetable 查询时刻表
 func QueryTimetable(tranNum string, date time.Time) (result []TimetableResult) {
-	tran := getTranInfo(tranNum, date)
+	tran, exist := getTranInfo(tranNum, date)
+	if !exist {
+		return
+	}
 	result = make([]TimetableResult, 0, len(tran.Timetable))
 	for i, v := range tran.Timetable {
 		r := TimetableResult{Name: v.StationName, DepTime: v.getStrDepTime(), ArrTime: v.getStrArrTime(), StayTime: v.getStrStayTime()}
@@ -60,8 +63,9 @@ func QueryTimetable(tranNum string, date time.Time) (result []TimetableResult) {
 
 // QuerySeatPrice 查询票价
 func QuerySeatPrice(tranNum string, date time.Time, depIdx, arrIdx uint8) (result map[string]float32) {
-	tran := getTranInfo(tranNum, date)
-	result = tran.getSeatPrice(depIdx, arrIdx)
+	if tran, exist := getTranInfo(tranNum, date); exist {
+		result = tran.getSeatPrice(depIdx, arrIdx)
+	}	
 	return
 }
 

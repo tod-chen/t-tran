@@ -2,7 +2,6 @@ package modules
 
 import (
 	"errors"
-	"strings"
 	"time"
 )
 
@@ -87,6 +86,7 @@ func hasTimeConflictInChange(contactID uint, depTime, arrTime time.Time, oldOrde
 
 // Order 订单
 type Order struct {
+	ID              uint64
 	OrderNum        string    // 订单号
 	UserID          uint      // 用户ID
 	ContactID       uint      // 联系人ID
@@ -110,27 +110,6 @@ type Order struct {
 	Status          uint8     // 订单状态 1.未支付 2.超时未支付 3.已支付 4.已退票 5.已改签 6.已出票
 	changeOrderID   uint64    // 改签票订单ID
 	sourceOrderID   uint64    // 原订单ID
-	DBModel
-}
-
-// getOrderPrice 获取订单价格
-func getOrderPrice(tranNum, seatType, seatNum string, depIdx, arrIdx uint8) (price float32) {
-	var priceSlice []float32
-	for i := 0; ; i++ {
-		if tranInfos[i].TranNum == tranNum {
-			switch seatType {
-			case constSeatTypeAdvancedSoftSleeper, constSeatTypeSoftSleeper, constSeatTypeHardSleeper:
-				priceSlice = tranInfos[i].SeatPriceMap[seatType+strings.Split(seatNum, "-")[1]]
-			default:
-				priceSlice = tranInfos[i].SeatPriceMap[seatType]
-			}
-			for j := depIdx; j < arrIdx; j++ {
-				price += priceSlice[j]
-			}
-			break
-		}
-	}
-	return 0
 }
 
 // SubmitOrder 订票
@@ -139,46 +118,43 @@ func SubmitOrder(tranNum string, date time.Time, depIdx, arrIdx uint8, userID, c
 	if !isCancelTimesInLimit(userID) {
 		return errors.New("您单日取消订单次数已达上限")
 	}
-
 	// 判断是否有未支付的订单，有未支付的订单，则不进行下一步 可考虑从数据库中查询
 	if hasUnpayOrder(userID) {
 		return errors.New("您有未完成的订单，请先完成订单")
 	}
-
-	tran := getTranInfo(tranNum, date)
+	tran, exist := getTranInfo(tranNum, date)
+	if !exist {
+		return errors.New("车次信息不存在")
+	}
 	// 判断当前乘坐人在乘车时间上是否冲突 可考虑从数据库中查询
 	depTime := tran.Timetable[depIdx].DepTime
 	arrTime := tran.Timetable[arrIdx].ArrTime
 	if hasTimeConflict(contactID, depTime, arrTime) {
 		return errors.New("乘车人时间冲突")
 	}
-
+	// 排班信息
 	scheduleTran := getScheduleTran(tranNum, date.Format(ConstYmdFormat))
+	carIdxList, exist := scheduleTran.carTypeIdxMap[seatType]
+	if !exist {
+		return errors.New("所选席别无效")
+	} 
 	// 锁定座位，创建订单
-	carLen := len(scheduleTran.Cars)
-	var s *ScheduleSeat
-	ok, isMedley, carIdx := false, false, -1
+	var car *ScheduleCar
+	var seat *ScheduleSeat
+	ok, isMedley := false, false
 	// 优先席位票
-	for i := 0; i < carLen; i++ {
-		if scheduleTran.Cars[i].SeatType != seatType {
-			continue
-		}
-		s, ok = scheduleTran.Cars[i].getAvailableSeat(depIdx, arrIdx, isStudent)
-		if ok {
-			carIdx = i
+	for _, carIdx := range carIdxList {
+		if seat, ok = scheduleTran.Cars[carIdx].getAvailableSeat(depIdx, arrIdx, isStudent); ok {
+			car = &scheduleTran.Cars[carIdx]
 			break
 		}
 	}
 	// 无席位票，则考虑站票
 	if !ok {
-		for i := 0; i < carLen; i++ {
-			if scheduleTran.Cars[i].SeatType != seatType {
-				continue
-			}
-			s, ok = scheduleTran.Cars[i].getAvailableNoSeat(depIdx, arrIdx)
-			if ok {
+		for _, carIdx := range carIdxList{
+			if seat, ok = scheduleTran.Cars[carIdx].getAvailableNoSeat(depIdx, arrIdx); ok {
+				car = &scheduleTran.Cars[carIdx]
 				isMedley = true
-				carIdx = i
 				break
 			}
 		}
@@ -194,9 +170,9 @@ func SubmitOrder(tranNum string, date time.Time, depIdx, arrIdx uint8, userID, c
 		ContactID:       contactID,
 		TranDepDate:     scheduleTran.DepartureDate,
 		TranNum:         tran.TranNum,
-		CarNum:          scheduleTran.Cars[carIdx].CarNum,
-		SeatNum:         s.SeatNum,
-		SeatType:        scheduleTran.Cars[carIdx].SeatType,
+		CarNum:          car.CarNum,
+		SeatNum:         seat.SeatNum,
+		SeatType:        car.SeatType,
 		CheckTicketGate: tran.Timetable[depIdx].CheckTicketGate,
 		DepStation:      tran.Timetable[depIdx].StationName,
 		DepStationIdx:   depIdx,
@@ -205,7 +181,7 @@ func SubmitOrder(tranNum string, date time.Time, depIdx, arrIdx uint8, userID, c
 		ArrStationIdx:   arrIdx,
 		ArrTime:         tran.Timetable[arrIdx].ArrTime,
 		// 根据价格表，各路段累加
-		Price:    getOrderPrice(tran.TranNum, scheduleTran.Cars[carIdx].SeatType, s.SeatNum, depIdx, arrIdx),
+		Price:    tran.getOrderPrice(car.SeatType, seat.SeatNum, depIdx, arrIdx),
 		BookTime: time.Now(),
 		Status:   1,
 	}
@@ -218,8 +194,8 @@ func SubmitOrder(tranNum string, date time.Time, depIdx, arrIdx uint8, userID, c
 		if o.Status == constOrderStatusUnpay {
 			seatBit := countSeatBit(o.DepStationIdx, o.ArrStationIdx)
 			o.Status = constOrderStatusTimeout
-			s.Release(seatBit)
-			scheduleTran.Cars[carIdx].releaseSeat(o.DepStationIdx, o.ArrStationIdx)
+			seat.Release(seatBit)
+			car.releaseSeat(o.DepStationIdx, o.ArrStationIdx)
 		}
 	})
 	return nil
@@ -300,7 +276,10 @@ func (o *Order) Change(tranNum string, date time.Time, depIdx, arrIdx uint8, use
 		return errors.New("您有未完成的订单，请先完成订单")
 	}
 
-	tran := getTranInfo(tranNum, date)
+	tran, exist := getTranInfo(tranNum, date)
+	if !exist {
+		return errors.New("改签的车次不存在")
+	}
 	// 判断当前乘坐人在乘车时间上是否冲突 可考虑从数据库中查询
 	depTime := tran.Timetable[depIdx].DepTime
 	arrTime := tran.Timetable[arrIdx].ArrTime
@@ -360,7 +339,7 @@ func (o *Order) Change(tranNum string, date time.Time, depIdx, arrIdx uint8, use
 		ArrStationIdx:   arrIdx,
 		ArrTime:         tran.Timetable[arrIdx].ArrTime,
 		// 根据价格表，各路段累加
-		Price:    getOrderPrice(tran.TranNum, scheduleTran.Cars[carIdx].SeatType, s.SeatNum, depIdx, arrIdx),
+		Price:    tran.getOrderPrice(scheduleTran.Cars[carIdx].SeatType, s.SeatNum, depIdx, arrIdx),
 		BookTime: time.Now(),
 		Status:   1,
 	}

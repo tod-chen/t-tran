@@ -124,7 +124,7 @@ func initCityTranMap() {
 	fmt.Println("init city tran map complete, cost time:", time.Now().Sub(start).Seconds(), "(s)")
 }
 
-func getTranInfo(tranNum string, date time.Time) *TranInfo {
+func getTranInfo(tranNum string, date time.Time) (*TranInfo, bool) {
 	idx := sort.Search(len(tranInfos), func(i int) bool {
 		if tranInfos[i].TranNum < tranNum ||
 			tranInfos[i].EnableEndDate.Before(date) ||
@@ -133,7 +133,10 @@ func getTranInfo(tranNum string, date time.Time) *TranInfo {
 		}
 		return true
 	})
-	return &tranInfos[idx]
+	if idx == -1 {
+		return nil, false
+	}
+	return &tranInfos[idx], true
 }
 
 func getViaTrans(depS, arrS *Station) (result []*TranInfo) {
@@ -369,8 +372,24 @@ func (t *TranInfo) IsMatchQuery(depS, arrS *Station, queryDate time.Time) (depId
 	return
 }
 
+// getOrderPrice 获取订单价格
+func (t *TranInfo) getOrderPrice(seatType, seatNum string, depIdx, arrIdx uint8) (price float32) {	
+	var priceSlice []float32
+	switch seatType {
+	case constSeatTypeAdvancedSoftSleeper, constSeatTypeSoftSleeper, constSeatTypeHardSleeper:
+		priceSlice = t.SeatPriceMap[seatType+strings.Split(seatNum, "-")[1]][depIdx:arrIdx-depIdx]
+	default:
+		priceSlice = t.SeatPriceMap[seatType][depIdx:arrIdx-depIdx]
+	}
+	for _, p := range priceSlice {
+		price += p
+	}
+	return
+}
+
 // Route 时刻表信息
 type Route struct {
+	ID              uint64
 	TranID          int     // 车次ID
 	TranNum         string  `gorm:"index:main;type:varchar(10)"` // 车次号
 	StationIndex    uint8   // 车站索引
@@ -384,7 +403,6 @@ type Route struct {
 	DepTime time.Time `gorm:"type:datetime" json:"depTime"`
 	// 到达时间
 	ArrTime time.Time `gorm:"type:datetime" json:"arrTime"`
-	DBModel
 }
 
 func (r *Route) getStrDepTime() string {
@@ -401,11 +419,11 @@ func (r *Route) getStrStayTime() string {
 
 // RoutePrice 各路段价格
 type RoutePrice struct {
+	ID         uint64
 	TranID     int     `gorm:"index:main"`      // 车次ID
 	SeatType   string  `gorm:"type:varchar(5)"` // 座次类型
 	RouteIndex uint8   // 路段索引
 	Price      float32 // 价格
-	DBModel
 }
 
 // Car 车厢信息结构体

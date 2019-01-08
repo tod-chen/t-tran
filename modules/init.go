@@ -2,7 +2,6 @@ package modules
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/jinzhu/gorm"
 	// mysql
@@ -19,20 +18,6 @@ var (
 	mgoSession *mgo.Session
 	db         *gorm.DB
 )
-
-// Config 配置项
-type Config struct {
-	Key   string // 配置名
-	Value string // 配置值
-}
-
-// DBModel 数据库模型
-type DBModel struct {
-	// 主键
-	ID       uint64    `gorm:"primary_key;AUTO_INCREMENT(1)" json:"id"`
-	CreateAt time.Time `gorm:"type:datetime"` // 创建时间
-	UpdateAt time.Time `gorm:"type:datetime"` // 更新时间
-}
 
 func getMgoSession() *mgo.Session {
 	if mgoSession == nil {
@@ -58,4 +43,5 @@ func init() {
 	initStation()
 	initTranInfo()
 	initSchedule()
+	// initUserInfos()
 }
