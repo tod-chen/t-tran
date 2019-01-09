@@ -53,6 +53,8 @@ func TestStructUser(t *testing.T) {
 		}
 	} else {
 		t.Error("ChangePwd fail for option")
-	}
+	}	
 }
+
+
 

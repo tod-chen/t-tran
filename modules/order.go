@@ -9,13 +9,17 @@ const (
 	constOneDayOrderCancelLimit = 3 // 单日订单取消上限数
 
 	// 订单状态
-	constOrderStatusUnpay     = iota // 未支付
-	constOrderStatusTimeout          // 未支付超时
-	constOrderStatusCancelled        // 取消未支付订单
-	constOrderStatusPaid             // 已支付
-	constOrderStatusRefund           // 已退票
-	constOrderStatusChanged          // 已改签
-	constOrderStatusIssued           // 已出票
+	constOrderStatusUnpay           = iota // 未支付
+	constOrderStatusTimeout                // 未支付超时
+	constOrderStatusCancelled              // 取消未支付订单
+	constOrderStatusPaid                   // 已支付
+	constOrderStatusRefund                 // 已退票
+	constOrderStatusChanged                // 已改签
+	constOrderStatusChangeUnPay            // 改签票未支付
+	constOrderStatusChangeTimeout          // 改签票支付超时
+	constOrderStatusChangeCancelled        // 改签票取消支付
+	constOrderStatusChangePaid             // 改签票已支付
+	constOrderStatusIssued                 // 已出票
 )
 
 var (
@@ -25,40 +29,33 @@ var (
 	validOrders []*Order
 )
 
-// 判断用户当天取消订单的次数是否已达上限
-func isCancelTimesInLimit(userID uint) bool {
-	lg, times := len(unpayOrders), 0
-	date := time.Now().Format(ConstYmdFormat)
-	for i := 0; i < lg; i++ {
-		if unpayOrders[i].UserID == userID &&
-			unpayOrders[i].BookTime.Format(ConstYmdFormat) == date &&
-			unpayOrders[i].Status == constOrderStatusCancelled {
+// OrderCancelTimes 订单取消次数模型
+type OrderCancelTimes struct {
+	UserID      uint64    // 用户ID
+	Date        time.Time // 日期
+	CancelTimes uint8     // 取消订单的次数
+}
 
-			times++
-			if times >= constOneDayOrderCancelLimit {
-				return false
-			}
-		}
-	}
-	return true
+// 判断用户当天取消订单的次数是否已达上限
+func isCancelTimesInLimit(userID uint64) bool {
+	date := time.Now().Format(ConstYmdFormat)
+	oct := &OrderCancelTimes{}
+	db.Where("user_id = ? and date = ?", userID, date).Attrs(OrderCancelTimes{CancelTimes: 0}).FirstOrCreate(oct)
+	return oct.CancelTimes < constOneDayOrderCancelLimit
 }
 
 // hasUnpayOrder 判断是否有未支付订单
-func hasUnpayOrder(userID uint) bool {
-	length := len(unpayOrders)
-	for i := 0; i < length; i++ {
-		if unpayOrders[i].UserID == userID {
-			return true
-		}
-	}
-	return false
+func hasUnpayOrder(userID uint64) bool {
+	count := 0
+	db.Model(&Order{}).Where("user_id = ? and status = 0", userID).Count(&count)
+	return count == 0
 }
 
 // hasTimeConflict 判断乘车人是否时间冲突
-func hasTimeConflict(contactID uint, depTime, arrTime time.Time) bool {
+func hasTimeConflict(contactID uint64, depTime, arrTime time.Time) bool {
 	length := len(validOrders)
 	for i := 0; i < length; i++ {
-		if validOrders[i].ContactID == contactID {
+		if validOrders[i].PassengerID == contactID {
 			if (validOrders[i].ArrTime.After(depTime) && validOrders[i].ArrTime.Before(arrTime)) ||
 				(validOrders[i].DepTime.After(depTime) && validOrders[i].DepTime.Before(arrTime)) ||
 				(depTime.After(validOrders[i].DepTime) && depTime.Before(validOrders[i].ArrTime)) {
@@ -70,10 +67,10 @@ func hasTimeConflict(contactID uint, depTime, arrTime time.Time) bool {
 }
 
 // hasTimeConflictInChange 改签时，判断乘车人是否时间冲突
-func hasTimeConflictInChange(contactID uint, depTime, arrTime time.Time, oldOrder *Order) bool {
+func hasTimeConflictInChange(contactID uint64, depTime, arrTime time.Time, oldOrder *Order) bool {
 	length := len(validOrders)
 	for i := 0; i < length; i++ {
-		if validOrders[i].ContactID == contactID && validOrders[i].OrderNum != oldOrder.OrderNum {
+		if validOrders[i].PassengerID == contactID && validOrders[i].OrderNum != oldOrder.OrderNum {
 			if (validOrders[i].ArrTime.After(depTime) && validOrders[i].ArrTime.Before(arrTime)) ||
 				(validOrders[i].DepTime.After(depTime) && validOrders[i].DepTime.Before(arrTime)) ||
 				(depTime.After(validOrders[i].DepTime) && depTime.Before(validOrders[i].ArrTime)) {
@@ -88,8 +85,8 @@ func hasTimeConflictInChange(contactID uint, depTime, arrTime time.Time, oldOrde
 type Order struct {
 	ID              uint64
 	OrderNum        string    // 订单号
-	UserID          uint      // 用户ID
-	ContactID       uint      // 联系人ID
+	UserID          uint64    // 用户ID
+	PassengerID     uint64    // 乘客ID
 	TranDepDate     string    // 列车发车日期
 	TranNum         string    // 车次号
 	CarNum          uint8     // 车厢号
@@ -113,7 +110,7 @@ type Order struct {
 }
 
 // SubmitOrder 订票
-func SubmitOrder(tranNum string, date time.Time, depIdx, arrIdx uint8, userID, contactID uint, isStudent bool, seatType string) error {
+func SubmitOrder(tranNum string, date time.Time, depIdx, arrIdx uint8, userID, contactID uint64, isStudent bool, seatType string) error {
 	// 判断是否已达单日取消订单次数上限
 	if !isCancelTimesInLimit(userID) {
 		return errors.New("您单日取消订单次数已达上限")
@@ -137,7 +134,7 @@ func SubmitOrder(tranNum string, date time.Time, depIdx, arrIdx uint8, userID, c
 	carIdxList, exist := scheduleTran.carTypeIdxMap[seatType]
 	if !exist {
 		return errors.New("所选席别无效")
-	} 
+	}
 	// 锁定座位，创建订单
 	var car *ScheduleCar
 	var seat *ScheduleSeat
@@ -151,7 +148,7 @@ func SubmitOrder(tranNum string, date time.Time, depIdx, arrIdx uint8, userID, c
 	}
 	// 无席位票，则考虑站票
 	if !ok {
-		for _, carIdx := range carIdxList{
+		for _, carIdx := range carIdxList {
 			if seat, ok = scheduleTran.Cars[carIdx].getAvailableNoSeat(depIdx, arrIdx); ok {
 				car = &scheduleTran.Cars[carIdx]
 				isMedley = true
@@ -167,7 +164,7 @@ func SubmitOrder(tranNum string, date time.Time, depIdx, arrIdx uint8, userID, c
 		//ID:              1,  // TODO: ID生成器需返回一个订单全局唯一ID
 		OrderNum:        "", // TODO: 订单号生成器需返回一个全局唯一订单号
 		UserID:          userID,
-		ContactID:       contactID,
+		PassengerID:     contactID,
 		TranDepDate:     scheduleTran.DepartureDate,
 		TranNum:         tran.TranNum,
 		CarNum:          car.CarNum,
@@ -242,7 +239,7 @@ func (o *Order) Payment(payType uint, payAccount string, price float32) error {
 	if o.Price != price {
 		return errors.New("支付金额错误")
 	}
-	if err := payment(o.ID, payType, o.UserID, payAccount, o.Price); err != nil {
+	if err := payment(o.ID, o.UserID, payType, payAccount, o.Price); err != nil {
 		return err
 	}
 	o.PayType = payType
@@ -258,14 +255,14 @@ func (o *Order) Refund() error {
 	if err := o.CancelOrder(); err != nil {
 		return err
 	}
-	if err := refund(o.ID, o.PayType, o.UserID, o.PayAccount, o.Price); err != nil {
+	if err := refund(o.ID, o.UserID, o.PayType, o.PayAccount, o.Price); err != nil {
 		return err
 	}
 	return nil
 }
 
 // Change 改签
-func (o *Order) Change(tranNum string, date time.Time, depIdx, arrIdx uint8, userID, contactID uint, isStudent bool, seatType string) error {
+func (o *Order) Change(tranNum string, date time.Time, depIdx, arrIdx uint8, userID, contactID uint64, isStudent bool, seatType string) error {
 	// 当前订单已有改签记录或者当前订单已是改签票，则不能再改签
 	if o.changeOrderID != 0 || o.sourceOrderID != 0 {
 		return errors.New("已经改签，无法再次改签")
@@ -325,7 +322,7 @@ func (o *Order) Change(tranNum string, date time.Time, depIdx, arrIdx uint8, use
 		//ID:              1,  // TODO: ID生成器需返回一个订单全局唯一ID
 		OrderNum:        "", // TODO: 订单号生成器需返回一个全局唯一订单号
 		UserID:          userID,
-		ContactID:       contactID,
+		PassengerID:     contactID,
 		TranDepDate:     scheduleTran.DepartureDate,
 		TranNum:         tran.TranNum,
 		CarNum:          scheduleTran.Cars[carIdx].CarNum,
@@ -351,7 +348,7 @@ func (o *Order) Change(tranNum string, date time.Time, depIdx, arrIdx uint8, use
 	// 原票价高于改签后的票价则需设置改签票为已支付状态，且需退还差额；否则改签票保持未支付状态，且用户需补交差额
 	if o.Price >= newOrder.Price {
 		// 退款
-		refund(o.ID, o.PayType, o.UserID, o.PayAccount, o.Price-newOrder.Price)
+		refund(o.ID, o.UserID, o.PayType, o.PayAccount, o.Price-newOrder.Price)
 		newOrder.Status = constOrderStatusPaid
 		o.Status = constOrderStatusChanged
 	} else {

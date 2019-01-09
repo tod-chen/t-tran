@@ -1,12 +1,11 @@
 package modules
 
 // payment 收款
-func payment(orderID uint64, payType, userID uint, payAccount string, price float32) error {
+func payment(orderID, userID uint64, payType uint, payAccount string, price float32) error {
 	return nil
 }
 
-
 // refund 退款
-func refund(orderID uint64, payType, userID uint, payAccount string, price float32) error {
+func refund(orderID, userID uint64, payType uint, payAccount string, price float32) error {
 	return nil
 }
