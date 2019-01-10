@@ -312,8 +312,7 @@ func (c *ScheduleCar) getNoSeatCount(depIdx, arrIdx uint8) uint8 {
 }
 
 // getAvailableSeat 获取可预订的座位,是否获取成功标记,是否为拼凑的站票标记
-func (c *ScheduleCar) getAvailableSeat(depIdx, arrIdx uint8, isStudent bool) (s *ScheduleSeat, ok bool) {
-	seatBit := countSeatBit(depIdx, arrIdx)
+func (c *ScheduleCar) getAvailableSeat(depIdx, arrIdx uint8, seatBit uint64, isStudent bool) (s *ScheduleSeat, ok bool) {
 	for i := 0; i < len(c.Seats); i++ {
 		if c.Seats[i].Book(seatBit, isStudent) {
 			c.occupySeat(depIdx, arrIdx)
@@ -323,11 +322,10 @@ func (c *ScheduleCar) getAvailableSeat(depIdx, arrIdx uint8, isStudent bool) (s 
 	return nil, false
 }
 
-func (c *ScheduleCar) getAvailableNoSeat(depIdx, arrIdx uint8) (s *ScheduleSeat, ok bool) {
+func (c *ScheduleCar) getAvailableNoSeat(depIdx, arrIdx uint8, seatBit uint64) (s *ScheduleSeat, ok bool) {
 	if c.NoSeatCount == 0 {
 		return nil, false
 	}
-	seatBit := countSeatBit(depIdx, arrIdx)
 	// 下面开始查找拼凑的站票
 	// 非站票数与站票数之和
 	totalSeatCount := len(c.Seats) + int(c.NoSeatCount)
