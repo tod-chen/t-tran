@@ -9,8 +9,8 @@ var allOrders []Order
 func checkTicket() {
 	date := time.Now()
 	for _, t := range tranInfos {
-		for i := -1; i < constDays; i++ {
-			dateStr := date.AddDate(0, 0, i).Format(ConstYmdFormat)
+		for i := 0; i < constDays; i++ {
+			dateStr := date.AddDate(0, 0, -i).Format(ConstYmdFormat)
 			checkTranTicket(t.TranNum, dateStr)
 		}
 	}
@@ -18,49 +18,68 @@ func checkTicket() {
 
 // checkTranTicket 校验具体某趟车次的订单
 func checkTranTicket(tranNum, date string) {
-	// 假设一趟车次总计有4000个有效订单
-	list := make([]*Order, 4000)
-	for i, o := range allOrders {
-		if o.TranNum == tranNum && o.TranDepDate == date &&
-			o.changeOrderID == 0 &&
-			(o.Status == constOrderStatusPaid || o.Status == constOrderStatusIssued) {
-			list = append(list, &allOrders[i])
-		}
-	}
 	st := getScheduleTran(tranNum, date)
-	t, _ := time.Parse(ConstYmdFormat, date)
-	tran, exist := getTranInfo(tranNum, t)
-	if !exist{
-		return
+	copySt := *st
+	for ci := 0; ci < len(copySt.Cars); ci++ {
+		if copySt.Cars[ci].NoSeatCount != 0 {
+			for ei := 0; ei < len(copySt.Cars[ci].EachRouteTravelerCount); ei++ {
+				copySt.Cars[ci].EachRouteTravelerCount[ei] = 0
+			}
+		}
+		for si := 0; si < len(copySt.Cars[ci].Seats); si++ {
+			copySt.Cars[ci].Seats[si].SeatBit = 0
+		}
 	}
+	validTicketStatus := []uint8{constTicketPaid, constTicketIssued, constTicketChangePaid, constTicketChangeIssued}
+	var tickets []Ticket
+	db.Where("tran_num = ? and tran_dep_date = ? and status in (?)", tranNum, date, validTicketStatus).Find(&tickets)
+	for _, t := range tickets {
+		car, seat := getCarAndSeat(&copySt, t.CarNum, t.SeatType, t.SeatNum)
+		seatBit := countSeatBit(t.DepStationIdx, t.ArrStationIdx)
+
+		car.occupySeat(t.DepStationIdx, t.ArrStationIdx)
+		if seat != nil {
+			if ok := seat.Book(seatBit, t.IsStudent); !ok {
+				notify := &notifyAdminInfo{
+					date:       t.TranDepDate,
+					tranNum:    t.TranNum,
+					carNum:     t.CarNum,
+					depStation: t.DepStation,
+					arrStation: t.ArrStation,
+					notifyType: "1",
+					message:    "Ticket Conflict"}
+				notify.notifyAdmin()
+			}
+		}
+	}
+	for ci:=0;ci<len(st.Cars);ci++{
+		if st.Cars[ci].NoSeatCount != 0 {
+			for ei:=0;ei<len(st.Cars[ci].EachRouteTravelerCount);ei++{
+				if st.Cars[ci].EachRouteTravelerCount[ei] != copySt.Cars[ci].EachRouteTravelerCount[ei]{
+					// TODO: 乘客人数不匹配，通知管理员处理
+				}
+			}
+		}
+		for si:=0;si<len(st.Cars[ci].Seats);si++{
+			if st.Cars[ci].Seats[si].SeatBit != copySt.Cars[ci].Seats[si].SeatBit{
+				// TODO：该座位存在问题，有可能是票冲突，也有可能是路段释放失败
+			}
+		}
+	}
+}
+
+func getCarAndSeat(st *ScheduleTran, carNum uint8, seatType, seatNum string) (*ScheduleCar, *ScheduleSeat) {
 	for ci := 0; ci < len(st.Cars); ci++ {
-		orderEachRouteTrvalerCount := make([]uint8, len(st.Cars[ci].EachRouteTravelerCount))
-		for _, o := range list {
-			if st.Cars[ci].CarNum == o.CarNum {
-				for i := o.DepStationIdx; i < o.ArrStationIdx; i++ {
-					orderEachRouteTrvalerCount[i]++
+		if st.Cars[ci].CarNum == carNum {
+			if seatType != constSeatTypeNoSeat {
+				for si := 0; si < len(st.Cars[ci].Seats); si++ {
+					if st.Cars[ci].Seats[si].SeatNum == seatNum {
+						return &st.Cars[ci], &st.Cars[ci].Seats[si]
+					}
 				}
 			}
-		}
-		for i := 0; i < len(orderEachRouteTrvalerCount); i++ {
-			// 当前车厢在当前路段，存在订单冲突
-			if st.Cars[ci].EachRouteTravelerCount[i] < orderEachRouteTrvalerCount[i] {
-				// 当前车厢在当前路段，多于席位数与站票数的总和
-				if orderEachRouteTrvalerCount[i] > uint8(len(st.Cars[ci].Seats))+st.Cars[ci].NoSeatCount {
-					notify := &notifyAdminInfo{
-						date : t,
-						tranNum: tranNum,
-						carNum: st.Cars[ci].CarNum,
-						depStation: tran.Timetable[i].StationName,
-						arrStation: tran.Timetable[i + 1].StationName,
-						notifyType: "1",
-						message: "Ticket Conflict"}
-					notify.notifyAdmin()
-					// TODO: 暴露出来
-				}
-			} else if st.Cars[ci].EachRouteTravelerCount[i] > orderEachRouteTrvalerCount[i] {
-				st.Cars[ci].EachRouteTravelerCount[i] = orderEachRouteTrvalerCount[i]
-			}
+			return &st.Cars[ci], nil
 		}
 	}
+	return nil, nil
 }

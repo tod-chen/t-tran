@@ -136,6 +136,10 @@ func getTranInfo(tranNum string, date time.Time) (*TranInfo, bool) {
 	if idx == -1 {
 		return nil, false
 	}
+	// 该车次在所选日期不发车
+	if int(date.Sub(tranInfos[idx].EnableStartDate).Hours())/(tranInfos[idx].ScheduleDays*24) != 0 {
+		return nil, false
+	}
 	return &tranInfos[idx], true
 }
 
@@ -373,18 +377,28 @@ func (t *TranInfo) IsMatchQuery(depS, arrS *Station, queryDate time.Time) (depId
 }
 
 // getOrderPrice 获取订单价格
-func (t *TranInfo) getOrderPrice(seatType, seatNum string, depIdx, arrIdx uint8) (price float32) {	
+func (t *TranInfo) getOrderPrice(seatType, seatNum string, depIdx, arrIdx uint8) (price float32) {
 	var priceSlice []float32
 	switch seatType {
 	case constSeatTypeAdvancedSoftSleeper, constSeatTypeSoftSleeper, constSeatTypeHardSleeper:
-		priceSlice = t.SeatPriceMap[seatType+strings.Split(seatNum, "-")[1]][depIdx:arrIdx-depIdx]
+		priceSlice = t.SeatPriceMap[seatType+strings.Split(seatNum, "-")[1]][depIdx : arrIdx-depIdx]
 	default:
-		priceSlice = t.SeatPriceMap[seatType][depIdx:arrIdx-depIdx]
+		priceSlice = t.SeatPriceMap[seatType][depIdx : arrIdx-depIdx]
 	}
 	for _, p := range priceSlice {
 		price += p
 	}
 	return
+}
+
+// getDepAndArrTime 获取出发和到站时间
+func (t *TranInfo)getDepAndArrTime(date string, depIdx, arrIdx uint8)(time.Time, time.Time){
+	depTime, arrTime := t.Timetable[depIdx].DepTime, t.Timetable[arrIdx].ArrTime
+	dt, _ := time.Parse(ConstYmdFormat, date)
+	y, m, d := dt.Date()
+	depTime = depTime.AddDate(y, int(m), d)
+	arrTime = arrTime.AddDate(y, int(m), d)
+	return depTime, arrTime
 }
 
 // Route 时刻表信息

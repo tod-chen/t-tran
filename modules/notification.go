@@ -19,13 +19,13 @@ type notifyCustomerInfo struct {
 }
 
 type notifyAdminInfo struct {
-	date       time.Time // 日期
-	tranNum    string    // 车次
-	carNum     uint8     // 车厢号
-	depStation string    // 出发站
-	arrStation string    // 到达站
-	notifyType string    // 通知类型
-	message    string    // 消息说明
+	date       string // 日期
+	tranNum    string // 车次
+	carNum     uint8  // 车厢号
+	depStation string // 出发站
+	arrStation string // 到达站
+	notifyType string // 通知类型
+	message    string // 消息说明
 }
 
 func (n *notifyAdminInfo) notifyAdmin() {
