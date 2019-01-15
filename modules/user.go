@@ -135,7 +135,7 @@ type Passenger struct {
 func getPassenger(paperworkNum string, paperworkType uint8) (Passenger, bool) {
 	p := new(Passenger)
 	db.Model(&Passenger{}).Where("paperwork_num = ? and paperwork_type = ?", paperworkNum, paperworkType).First(p)
-	if p.PaperworkNum != paperworkNum || p.PaperworkType != paperworkType{
+	if p.PaperworkNum != paperworkNum || p.PaperworkType != paperworkType {
 		return *p, false
 	}
 	return *p, true
@@ -179,8 +179,9 @@ func (u *User) Register(p Passenger) (bool, error) {
 		u.UID = passenger.PID
 	} else {
 		// 证件信息未登记在册，则创建一个
-		db.Create(&p)
+		p.PID = getPassengerID()
 		u.UID = p.PID
+		db.Create(&p)
 	}
 	db.Create(&u)
 	return true, nil
@@ -230,6 +231,7 @@ func (u *User) AddContact(c *Contact) (bool, error) {
 		// 乘客类别、手机号、固话、邮箱、住址、邮编可由添加者随意填写，不用与乘客表中保持一致
 	} else { // 乘客未登记在册的情况
 		passenger := &Passenger{
+			PID:           getPassengerID(),
 			Name:          c.Name,
 			IsMale:        c.IsMale,
 			Area:          c.Area,
@@ -243,8 +245,8 @@ func (u *User) AddContact(c *Contact) (bool, error) {
 			Addr:          c.Addr,
 			ZipCode:       c.ZipCode,
 		}
-		db.Create(passenger)
 		c.PID = passenger.PID
+		db.Create(passenger)
 	}
 	db.Create(c)
 	return true, nil

@@ -22,7 +22,16 @@ func (p *IDPool) pull() {
 	}
 }
 
-func (p *IDPool) getID(baseID uint64) uint64 {
+func (p *IDPool) getID() uint64 {
+	id := <-p.pool
+	p.len--
+	if p.len == 0 {
+		p.pull()
+	}
+	return id
+}
+
+func (p *IDPool) getIDByModel(baseID uint64) uint64 {
 	p.Lock()
 	id := <-p.pool
 	m := baseID % 10 // 模10
@@ -36,8 +45,9 @@ func (p *IDPool) getID(baseID uint64) uint64 {
 }
 
 var (
-	orderIDPool  IDPool
-	ticketIDPool IDPool
+	passengerIDPool IDPool
+	orderIDPool     IDPool
+	ticketIDPool    IDPool
 )
 
 func initGenerateID() {
@@ -57,21 +67,33 @@ func initGenerateID() {
 		key:      "ticket_id",
 	}
 	ticketIDPool.pull()
+
+	passengerIDPool = IDPool{
+		capacity: cap,
+		len:      cap,
+		pool:     make(chan uint64, cap),
+		key:      "passenger_id",
+	}
+	passengerIDPool.pull()
+}
+
+func getPassengerID() uint64{
+	return passengerIDPool.getID()
 }
 
 func getOrderID(userID uint64) uint64 {
-	return orderIDPool.getID(userID)
+	return orderIDPool.getIDByModel(userID)
 }
 
 func getTicketID(passengerID uint64) uint64 {
-	return ticketIDPool.getID(passengerID)
+	return ticketIDPool.getIDByModel(passengerID)
 }
 
 func getMultiTicketID(passengerIDs []uint64) []uint64 {
 	pLen := len(passengerIDs)
 	result := make([]uint64, pLen)
 	for i := 0; i < pLen; i++ {
-		id := ticketIDPool.getID(passengerIDs[i])
+		id := ticketIDPool.getIDByModel(passengerIDs[i])
 		result[i] = id
 	}
 	return result

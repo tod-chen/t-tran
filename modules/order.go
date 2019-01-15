@@ -130,14 +130,15 @@ func SubmitOrder(userID uint64, passengerIDs []uint64, tranNum, date string, dep
 		tickets = append(tickets, buildTicket(tran, car, seat, passengerIDs[i], date, depIdx, arrIdx, depTime, arrTime, isMedley, isStudent))
 	}
 	o := &Order{
-		ID:       1,  // TODO: ID生成器需返回一个订单全局唯一ID
+		ID:       getOrderID(userID),
 		OrderNum: "", // TODO: 订单号生成器需返回一个全局唯一订单号
 		UserID:   userID,
 		BookTime: time.Now(),
 		Status:   constOrderUnpay,
 	}
+	ticketIDs := getMultiTicketID(passengerIDs)
 	for i := 0; i < len(tickets); i++ {
-		tickets[i].ID = 1 // TODO: ID生成器需返回一个车票全局唯一ID
+		tickets[i].ID = ticketIDs[i]
 		tickets[i].OrderID = o.ID
 		db.Create(tickets[i])
 		o.Price += tickets[i].Price
@@ -198,9 +199,10 @@ func ChangeOrder(userID, passengerID, ticketID uint64, tranNum, date string, dep
 		return errors.New("没有足够的票")
 	}
 	newTicket := buildTicket(tran, car, seat, passengerID, date, depIdx, arrIdx, depTime, arrTime, isMedley, isStudent)
+	newTicket.ID = getTicketID(passengerID)
 	newTicket.ChangeTicketID = oldTicket.ID
 	newOrder := &Order{
-		//ID:              1,  // TODO: ID生成器需返回一个订单全局唯一ID
+		ID:       getOrderID(userID),
 		OrderNum: "", // TODO: 订单号生成器需返回一个全局唯一订单号
 		UserID:   userID,
 		Price:    newTicket.Price,
@@ -361,4 +363,5 @@ func (o *Ticket) CheckIn() {
 	if o.Status == constTicketPaid || o.Status == constTicketChangePaid {
 		o.Status = constTicketIssued
 	}
+	db.Save(o)
 }
