@@ -19,6 +19,8 @@ func init() {
 	setAdminRouter(g.Group("/admin"))
 	// set user router
 	setUserRouter(g.Group("/"))
+	// set payment router
+	setPaymentRouter(g.Group("/payment"))
 	// set server info
 	s := &http.Server{
 		Addr:           ":8080",

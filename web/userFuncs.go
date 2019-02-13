@@ -25,6 +25,19 @@ func setUserRouter(g *gin.RouterGroup) {
 	g.GET("/queryTimetable", queryTimetable)
 	// 查询票价
 	g.GET("/queryPrice", queryPrice)
+	// 提交订单
+	g.POST("/submitOrder", submitOrder)
+	// 确认改签
+	g.POST("/changeOrder", changeOrder)
+	// 查询订单
+	g.GET("/queryOrder", queryOrder)
+	// 取消订单
+	g.POST("/cancelOrder", cancelOrder)
+	// 退票
+	g.POST("/refundOrder", refundOrder)
+	// 出票
+	g.POST("/printTicket", printTicket)
+
 }
 
 func login(c *gin.Context) {
@@ -68,36 +81,82 @@ func queryPrice(c *gin.Context) {
 }
 
 // 提交订单
-func submitOrder() {
+func submitOrder(c *gin.Context) {
+	var model modules.SubmitOrderModel
+	if err := c.BindJSON(&model); err != nil {
+		c.JSON(http.StatusOK, gin.H{"success": false, "msg": "Post Data Err"})
+		return
+	}
+	if err := modules.SubmitOrder(model); err != nil {
+		c.JSON(http.StatusOK, gin.H{"success": false, "msg": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success":true})
+}
 
+// 改签
+func changeOrder(c *gin.Context) {
+	var model modules.SubmitOrderModel
+	if err := c.BindJSON(&model); err != nil {
+		c.JSON(http.StatusOK, gin.H{"success": false, "msg": "Post Data Err"})
+		return
+	}
+	oldID := c.PostForm("oldTicketID")
+	oldTicketID, err := strconv.ParseUint(oldID, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"success": false, "msg": "原车票信息无效"})
+		return
+	}
+	if err = modules.ChangeOrder(model, oldTicketID); err != nil {
+		c.JSON(http.StatusOK, gin.H{"success":false, "msg":err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success":true})
 }
 
 // 查询订单
-func queryOrder() {
+func queryOrder(c *gin.Context) {
 
 }
 
 // 取消订单
-func cancelOrder() {
-
-}
-
-// 支付订单
-func paymentOrder() {
-
+func cancelOrder(c *gin.Context) {
+	orderID := c.PostForm("orderID")
+	oID, err := strconv.ParseUint(orderID, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"success":false, "msg":"订单无效"})
+		return
+	}
+	if err = modules.CancelOrder(oID); err != nil {
+		c.JSON(http.StatusOK, gin.H{"success":false, "msg":err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success":true})
 }
 
 // 退票
-func refundOrder() {
-
-}
-
-// 改签
-func changeOrder() {
-
+func refundOrder(c *gin.Context) {
+	orderID := c.PostForm("orderID")
+	oID, err := strconv.ParseUint(orderID, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"success":false, "msg":"订单无效"})
+		return
+	}
+	if err = modules.RefundOrder(oID); err != nil {
+		c.JSON(http.StatusOK, gin.H{"success":false, "msg":err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success":true})
 }
 
 // 取票
-func printTicket() {
-
+func printTicket(c *gin.Context) {
+	ticketID := c.PostForm("ticketID")
+	tID, err := strconv.ParseUint(ticketID, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"success":false, "msg":"订单无效"})
+		return
+	}
+	modules.CheckIn(tID)
+	c.JSON(http.StatusOK, gin.H{"success":true})
 }

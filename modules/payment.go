@@ -1,11 +1,18 @@
 package modules
 
-// payment 收款
-func payment(orderID, userID uint64, payType uint, payAccount string, price float32) error {
+const(
+	// PayTypeAliPay 支付类型-支付宝
+	PayTypeAliPay = 1
+	// PayTypeWeChatPay 支付类型-微信
+	PayTypeWeChatPay = 2
+)
+
+// Payment 收款
+func Payment(orderID, userID uint64, payType uint, payAccount string, price float32, timestamp string) error {
 	return nil
 }
 
-// refund 退款
-func refund(orderID, userID uint64, payType uint, payAccount string, price float32) error {
+// Refund 退款
+func Refund(orderID, userID uint64, payType uint, payAccount string, price float32, timestamp string) error {
 	return nil
 }
