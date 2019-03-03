@@ -69,7 +69,7 @@ func QuerySeatPrice(tranNum string, date time.Time, depIdx, arrIdx uint8) (resul
 	return
 }
 
-func countSeatBit(depIdx, arrIdx uint8) (result uint64) {
+func countSeatBit(depIdx, arrIdx uint8) (result int64) {
 	for i := depIdx; i <= arrIdx; i++ {
 		result ^= 1 << i
 	}

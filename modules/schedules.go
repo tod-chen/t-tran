@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"gopkg.in/mgo.v2/bson"
@@ -213,7 +214,7 @@ type ScheduleTran struct {
 	SaleTicketTime time.Time            `bson:"saleTicketTime"` // 售票时间
 	Cars           []ScheduleCar        `bson:"cars"`           // 车厢
 	carTypeIdxMap  map[string]([]uint8) `bson:"carTypeIdxMap"`  // 各座次类型及其对应的车厢索引集合
-	FullSeatBit    uint64               `bson:"fullSeatBit"`    // 全程满座的位标记值，某座位的位标记与此值相等时，表示该座位全程满座了
+	FullSeatBit    int64                `bson:"fullSeatBit"`    // 全程满座的位标记值，某座位的位标记与此值相等时，表示该座位全程满座了
 }
 
 func getScheduleTran(tranNum, date string) *ScheduleTran {
@@ -228,12 +229,6 @@ func getScheduleTran(tranNum, date string) *ScheduleTran {
 		scheduleTranMap[date+tranNum] = tran
 	}
 	return tran
-	// for i := 0; i < len(scheduleTranMap[date]); i++ {
-	// 	if scheduleTranMap[date][i].TranNum == tranNum {
-	// 		return &scheduleTranMap[date][i]
-	// 	}
-	// }
-	// return nil
 }
 
 // Save 保存到数据库
@@ -257,13 +252,11 @@ func (st *ScheduleTran) setCarTypeIdxMap() {
 
 // GetAvaliableSeatCount 获取各席别余票数
 func (st *ScheduleTran) GetAvaliableSeatCount(depIdx, arrIdx uint8, isStudent bool) *[]int {
-	fmt.Println("tranNum:", st.TranNum, ", depIdx:", depIdx, ", arrIdx:", arrIdx)
 	// 总共11类座次
 	result := []int{-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}
 	// 路段位标记
 	seatBit, noSeatCount := countSeatBit(depIdx, arrIdx), 0
 	for seatType, idxs := range st.carTypeIdxMap {
-		resultIdx := seatTypeIdxMap[seatType]
 		avaliableSeatCount := 0
 		for _, idx := range idxs {
 			for i := 0; i < len(st.Cars[idx].Seats) && avaliableSeatCount < constMaxAvaliableSeatCount; i++ {
@@ -275,7 +268,7 @@ func (st *ScheduleTran) GetAvaliableSeatCount(depIdx, arrIdx uint8, isStudent bo
 				noSeatCount += int(st.Cars[idx].getNoSeatCount(depIdx, arrIdx))
 			}
 		}
-		result[resultIdx] = avaliableSeatCount
+		result[seatTypeIdxMap[seatType]] = avaliableSeatCount
 	}
 	result[len(result)-1] = noSeatCount
 	return &result
@@ -301,7 +294,6 @@ func (c *ScheduleCar) getNoSeatCount(depIdx, arrIdx uint8) uint8 {
 	// 旅途中当前车厢旅客最大数
 	var maxTravelerCountInRoute uint8
 	c.RLock()
-	fmt.Println(c.EachRouteTravelerCount)
 	for i := depIdx; i < arrIdx; i++ {
 		if c.EachRouteTravelerCount[i] > maxTravelerCountInRoute {
 			maxTravelerCountInRoute = c.EachRouteTravelerCount[i]
@@ -312,7 +304,7 @@ func (c *ScheduleCar) getNoSeatCount(depIdx, arrIdx uint8) uint8 {
 }
 
 // getAvailableSeat 获取可预订的座位,是否获取成功标记,是否为拼凑的站票标记
-func (c *ScheduleCar) getAvailableSeat(depIdx, arrIdx uint8, seatBit uint64, isStudent bool) (s *ScheduleSeat, ok bool) {
+func (c *ScheduleCar) getAvailableSeat(depIdx, arrIdx uint8, seatBit int64, isStudent bool) (s *ScheduleSeat, ok bool) {
 	for i := 0; i < len(c.Seats); i++ {
 		if c.Seats[i].Book(seatBit, isStudent) {
 			c.occupySeat(depIdx, arrIdx)
@@ -322,7 +314,7 @@ func (c *ScheduleCar) getAvailableSeat(depIdx, arrIdx uint8, seatBit uint64, isS
 	return nil, false
 }
 
-func (c *ScheduleCar) getAvailableNoSeat(depIdx, arrIdx uint8, seatBit uint64) (s *ScheduleSeat, ok bool) {
+func (c *ScheduleCar) getAvailableNoSeat(depIdx, arrIdx uint8, seatBit int64) (s *ScheduleSeat, ok bool) {
 	if c.NoSeatCount == 0 {
 		return nil, false
 	}
@@ -381,14 +373,13 @@ func (c *ScheduleCar) releaseSeat(depIdx, arrIdx uint8) {
 
 // ScheduleSeat 排班中的座位
 type ScheduleSeat struct {
-	SeatNum    string     // 座位号
-	IsStudent  bool       // 是否预留给学生的座位
-	SeatBit    uint64     // 座位的位标记，64位代表64个路段，值为7时，表示从起始站到第四站，这个座位都被人订了
-	sync.Mutex `bson:"-"` // 锁，订票与退票均需要锁
+	SeatNum   string // 座位号
+	IsStudent bool   // 是否预留给学生的座位
+	SeatBit   int64  // 座位的位标记，64位代表64个路段，值为7时，表示从起始站到第四站，这个座位都被人订了
 }
 
 // IsAvailable 根据路段和乘客类型判断能否订票
-func (s *ScheduleSeat) IsAvailable(seatBit uint64, isStudent bool) bool {
+func (s *ScheduleSeat) IsAvailable(seatBit int64, isStudent bool) bool {
 	// 学生可订成人票，成人不可订学生票，发车前，需将未售的学生票全部改为成人票，用以出售
 	if s.IsStudent && !isStudent {
 		return false
@@ -397,19 +388,14 @@ func (s *ScheduleSeat) IsAvailable(seatBit uint64, isStudent bool) bool {
 }
 
 // Book 订票
-func (s *ScheduleSeat) Book(seatBit uint64, isStudent bool) bool {
+func (s *ScheduleSeat) Book(seatBit int64, isStudent bool) bool {
 	if !s.IsAvailable(seatBit, isStudent) {
 		return false
 	}
-	s.Lock()
-	s.SeatBit ^= seatBit
-	s.Unlock()
-	return true
+	return atomic.CompareAndSwapInt64(&s.SeatBit, s.SeatBit, s.SeatBit+seatBit)
 }
 
 // Release 退票或取消订单，释放座位对应路段的资源
-func (s *ScheduleSeat) Release(seatBit uint64) {
-	s.Lock()
-	s.SeatBit ^= (^seatBit)
-	s.Unlock()
+func (s *ScheduleSeat) Release(seatBit int64) {
+	atomic.AddInt64(&s.SeatBit, -seatBit)
 }

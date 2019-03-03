@@ -169,7 +169,7 @@ func SubmitOrder(par SubmitOrderModel) error {
 }
 
 // 订座位
-func bookSeat(st *ScheduleTran, carIdxList []uint8, depIdx, arrIdx uint8, seatBit uint64, isStudent bool) (car *ScheduleCar, seat *ScheduleSeat, isMedley, ok bool) {
+func bookSeat(st *ScheduleTran, carIdxList []uint8, depIdx, arrIdx uint8, seatBit int64, isStudent bool) (car *ScheduleCar, seat *ScheduleSeat, isMedley, ok bool) {
 	// 优先席位票
 	for _, carIdx := range carIdxList {
 		if seat, ok = st.Cars[carIdx].getAvailableSeat(depIdx, arrIdx, seatBit, isStudent); ok {
