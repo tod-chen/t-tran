@@ -16,4 +16,5 @@
 >### 3. [gin](https://github.com/gin-gonic/gin) web及对外API
 
 * ## 微服务规划
->### ![t-tran](https://thumbnail0.baidupcs.com/thumbnail/515f2eed97d78eaf7d6a02666aba40f3?fid=472066166-250528-79704286565942&time=1551020400&rt=sh&sign=FDTAER-DCb740ccc5511e5e8fedcff06b081203-iH9iPnvXPLC0lyQNaSG5KxX6kyY%3D&expires=8h&chkv=0&chkbd=0&chkpc=&dp-logid=1274843323010150927&dp-callid=0&size=c710_u400&quality=100&vuk=-&ft=video)
+>### 
+![t-tran](https://raw.githubusercontent.com/tod-chen/t-tran/master/MAP.png)
