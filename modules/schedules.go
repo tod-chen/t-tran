@@ -35,7 +35,7 @@ var (
 	// 排班的车厢集
 	scheduleCarMap map[int](*ScheduleCar)
 	// 列车按日期安排表
-	scheduleTranMap map[string](*ScheduleTran)
+	scheduleTranMap sync.Map
 )
 
 func isSameDay(src, tar time.Time) bool {
@@ -72,7 +72,6 @@ func initScheduleCar() {
 func initScheduleTran() {
 	start := time.Now()
 	goPoolCompute := newGoPool(300)
-	scheduleTranMap = make(map[string](*ScheduleTran), constDays)
 	now := time.Now()
 	y, m, d := now.Date()
 	today := time.Date(y, m, d, 0, 0, 0, 0, time.Local)
@@ -218,7 +217,9 @@ type ScheduleTran struct {
 }
 
 func getScheduleTran(tranNum, date string) *ScheduleTran {
-	tran, exist := scheduleTranMap[date+tranNum]
+	key := date + tranNum
+	val, exist := scheduleTranMap.Load(key)
+	tran := val.(*ScheduleTran)
 	if !exist {
 		session := getMgoSession()
 		defer session.Close()
@@ -226,7 +227,17 @@ func getScheduleTran(tranNum, date string) *ScheduleTran {
 		tran = &ScheduleTran{}
 		coll.Find(bson.M{"departureDate": date, "tranNum": tranNum}).One(tran)
 		tran.setCarTypeIdxMap()
-		scheduleTranMap[date+tranNum] = tran
+		scheduleTranMap.Store(key, tran)
+		time.AfterFunc(5 * time.Second, func(){
+			if aVal, ok := scheduleTranMap.Load(key); ok {
+				aTran := aVal.(*ScheduleTran)
+				session := getMgoSession()
+				coll := session.DB(constMgoDB).C("tranSchedule")
+				coll.Update(bson.M{"departureDate": date, "tranNum": tranNum}, aTran)
+				session.Close()
+				scheduleTranMap.Delete(key)
+			}
+		})
 	}
 	return tran
 }
