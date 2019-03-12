@@ -228,15 +228,9 @@ func getScheduleTran(tranNum, date string) *ScheduleTran {
 		coll.Find(bson.M{"departureDate": date, "tranNum": tranNum}).One(tran)
 		tran.setCarTypeIdxMap()
 		scheduleTranMap.Store(key, tran)
-		time.AfterFunc(5 * time.Second, func(){
-			if aVal, ok := scheduleTranMap.Load(key); ok {
-				aTran := aVal.(*ScheduleTran)
-				session := getMgoSession()
-				coll := session.DB(constMgoDB).C("tranSchedule")
-				coll.Update(bson.M{"departureDate": date, "tranNum": tranNum}, aTran)
-				session.Close()
-				scheduleTranMap.Delete(key)
-			}
+		time.AfterFunc(5*time.Second, func() {
+			coll.Update(bson.M{"departureDate": date, "tranNum": tranNum}, tran)
+			scheduleTranMap.Delete(key)
 		})
 	}
 	return tran
@@ -315,17 +309,17 @@ func (c *ScheduleCar) getNoSeatCount(depIdx, arrIdx uint8) uint8 {
 }
 
 // getAvailableSeat 获取可预订的座位,是否获取成功标记,是否为拼凑的站票标记
-func (c *ScheduleCar) getAvailableSeat(depIdx, arrIdx uint8, seatBit int64, isStudent bool) (s *ScheduleSeat, ok bool) {
+func (c *ScheduleCar) getAvailableSeat(par *SubmitOrderModel) (s *ScheduleSeat, ok bool) {
 	for i := 0; i < len(c.Seats); i++ {
-		if c.Seats[i].Book(seatBit, isStudent) {
-			c.occupySeat(depIdx, arrIdx)
+		if c.Seats[i].Book(par.seatBit, par.IsStudent) {
+			c.occupySeat(par.DepIdx, par.ArrIdx)
 			return &c.Seats[i], true
 		}
 	}
 	return nil, false
 }
 
-func (c *ScheduleCar) getAvailableNoSeat(depIdx, arrIdx uint8, seatBit int64) (s *ScheduleSeat, ok bool) {
+func (c *ScheduleCar) getAvailableNoSeat(par *SubmitOrderModel) (s *ScheduleSeat, ok bool) {
 	if c.NoSeatCount == 0 {
 		return nil, false
 	}
@@ -335,15 +329,15 @@ func (c *ScheduleCar) getAvailableNoSeat(depIdx, arrIdx uint8, seatBit int64) (s
 	// 旅途中当前车厢旅客最大数
 	var maxTravelerCountInRoute uint8
 	c.RLock()
-	for i := depIdx; i < arrIdx; i++ {
+	for i := par.DepIdx; i < par.ArrIdx; i++ {
 		if c.EachRouteTravelerCount[i] > maxTravelerCountInRoute {
 			maxTravelerCountInRoute = c.EachRouteTravelerCount[i]
 		}
 	}
 	c.RUnlock()
 	if totalSeatCount-int(maxTravelerCountInRoute) > 0 {
-		c.occupySeat(depIdx, arrIdx)
-		s = &ScheduleSeat{SeatBit: seatBit}
+		c.occupySeat(par.DepIdx, par.ArrIdx)
+		s = &ScheduleSeat{SeatBit: par.seatBit}
 		return s, true
 	}
 	return nil, false

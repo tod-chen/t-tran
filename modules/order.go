@@ -66,7 +66,7 @@ type Order struct {
 }
 
 // GetOrderInfo 获取订单信息
-func GetOrderInfo(orderID uint64) *Order{
+func GetOrderInfo(orderID uint64) *Order {
 	order := Order{}
 	db.Where("id = ?", orderID).First(&order)
 	return &order
@@ -99,16 +99,33 @@ func submitOrderValid(userID uint64, tranNum, date string) (*TranInfo, error) {
 }
 
 // SubmitOrderModel 提交订单的请求结构体
-type SubmitOrderModel struct{
-	UserID uint64 `bson:"userID"`
-	TranNum string `bson:"tranNum"`
-	Date string `bson:"date"`
-	DepIdx uint8 `bson:"depIdx"`
-	ArrIdx uint8 `bson:"arrIdx"`
-	PassengerIDs []uint64 `bson:"passengerIDs"`
-	IsPortion bool `bson:"isPortion"`
-	IsStudent bool 	`bson:"isStudent"`
-	SeatType string `bson:"seatType"`
+type SubmitOrderModel struct {
+	UserID       uint64   `bson:"userID"`       // 用户ID
+	TranNum      string   `bson:"tranNum"`      // 车次号
+	Date         string   `bson:"date"`         // 发车日期
+	DepIdx       uint8    `bson:"depIdx"`       // 乘车站在路段中的索引
+	ArrIdx       uint8    `bson:"arrIdx"`       // 到达站在路段中的索引
+	PassengerIDs []uint64 `bson:"passengerIDs"` // 乘客
+	IsPortion    bool     `bson:"isPortion"`    // 是否部分提交
+	IsStudent    bool     `bson:"isStudent"`    // 是否为学生票
+	SeatType     string   `bson:"seatType"`     // 席别
+
+	depTime time.Time // 乘车时间
+	arrTime time.Time // 到达时间
+	seatBit int64     // 从乘车站到目的站占用的位值  0x06 [0000 0110] -> 第2站到第4站
+	pLen    int       // 乘客数量
+}
+
+// 根据车次信息初始化提交订单的非公开属性
+func (m *SubmitOrderModel) init(tran *TranInfo) {
+	depTime, arrTime := tran.getDepAndArrTime(m.Date, m.DepIdx, m.ArrIdx)
+	m.depTime = depTime
+	m.arrTime = arrTime
+	m.seatBit = countSeatBit(m.DepIdx, m.ArrIdx)
+	m.pLen = len(m.PassengerIDs)
+	if m.pLen == 1 {
+		m.IsPortion = false
+	}
 }
 
 // SubmitOrder 订票
@@ -123,31 +140,25 @@ func SubmitOrder(par SubmitOrderModel) error {
 	if !exist {
 		return errors.New("所选席别无效")
 	}
-	pLen := len(par.PassengerIDs)
-	if pLen == 1 {
-		par.IsPortion = false
-	}
-	tickets, cars, seats := make([]*Ticket, 0, pLen), make([]*ScheduleCar, 0, pLen), make([]*ScheduleSeat, 0, pLen)
-	// 获取发车时间和到站时间
-	depTime, arrTime := tran.getDepAndArrTime(par.Date, par.DepIdx, par.ArrIdx)
-	seatBit := countSeatBit(par.DepIdx, par.ArrIdx)
-	for i := 0; i < pLen; i++ {
-		if hasTimeConflict(par.PassengerIDs[i], depTime, arrTime) {
+	par.init(tran)
+	tickets, cars, seats := make([]*Ticket, 0, par.pLen), make([]*ScheduleCar, 0, par.pLen), make([]*ScheduleSeat, 0, par.pLen)
+	for i := 0; i < par.pLen; i++ {
+		if hasTimeConflict(par.PassengerIDs[i], par.depTime, par.arrTime) {
 			return errors.New("乘车人时间冲突")
 		}
-		car, seat, isMedley, ok := bookSeat(scheduleTran, carIdxList, par.DepIdx, par.ArrIdx, seatBit, par.IsStudent)
+		car, seat, isMedley, ok := bookSeat(scheduleTran, carIdxList, &par)
 		if ok {
 			cars = append(cars, car)
 			seats = append(seats, seat)
 		} else if !par.IsPortion {
 			// 无票 且要求全部提交时，释放已占用的资源 直接返回
 			for i := 0; i < len(cars); i++ {
-				seats[i].Release(seatBit)
+				seats[i].Release(par.seatBit)
 				cars[i].releaseSeat(par.DepIdx, par.ArrIdx)
 			}
 			return errors.New("没有足够的票")
 		}
-		tickets = append(tickets, buildTicket(tran, car, seat, par.PassengerIDs[i], par.Date, par.DepIdx, par.ArrIdx, depTime, arrTime, isMedley, par.IsStudent))
+		tickets = append(tickets, buildTicket(tran, car, &par, seat.SeatNum, par.PassengerIDs[i], isMedley))
 	}
 	o := &Order{
 		ID:       getOrderID(par.UserID),
@@ -169,10 +180,10 @@ func SubmitOrder(par SubmitOrderModel) error {
 }
 
 // 订座位
-func bookSeat(st *ScheduleTran, carIdxList []uint8, depIdx, arrIdx uint8, seatBit int64, isStudent bool) (car *ScheduleCar, seat *ScheduleSeat, isMedley, ok bool) {
+func bookSeat(st *ScheduleTran, carIdxList []uint8, par *SubmitOrderModel) (car *ScheduleCar, seat *ScheduleSeat, isMedley, ok bool) {
 	// 优先席位票
 	for _, carIdx := range carIdxList {
-		if seat, ok = st.Cars[carIdx].getAvailableSeat(depIdx, arrIdx, seatBit, isStudent); ok {
+		if seat, ok = st.Cars[carIdx].getAvailableSeat(par); ok {
 			car = &st.Cars[carIdx]
 			break
 		}
@@ -180,7 +191,7 @@ func bookSeat(st *ScheduleTran, carIdxList []uint8, depIdx, arrIdx uint8, seatBi
 	// 无席位票，则考虑站票
 	if !ok {
 		for _, carIdx := range carIdxList {
-			if seat, ok = st.Cars[carIdx].getAvailableNoSeat(depIdx, arrIdx, seatBit); ok {
+			if seat, ok = st.Cars[carIdx].getAvailableNoSeat(par); ok {
 				car = &st.Cars[carIdx]
 				isMedley = true
 				break
@@ -201,9 +212,9 @@ func ChangeOrder(par SubmitOrderModel, oldTicketID uint64) error {
 	if oldTicket.ChangeTicketID != 0 {
 		return errors.New("已经改签，无法再次改签")
 	}
+	par.init(tran)
 	// 出发时间和到站时间
-	depTime, arrTime := tran.getDepAndArrTime(par.Date, par.DepIdx, par.ArrIdx)
-	if hasTimeConflictInChange(par.PassengerIDs[0], oldTicketID, depTime, arrTime) {
+	if hasTimeConflictInChange(par.PassengerIDs[0], oldTicketID, par.depTime, par.arrTime) {
 		return errors.New("乘车人时间冲突")
 	}
 	scheduleTran := getScheduleTran(par.TranNum, par.Date)
@@ -212,13 +223,12 @@ func ChangeOrder(par SubmitOrderModel, oldTicketID uint64) error {
 	if !exist {
 		return errors.New("所选席别无效")
 	}
-	seatBit := countSeatBit(par.DepIdx, par.ArrIdx)
-	car, seat, isMedley, ok := bookSeat(scheduleTran, carIdxList, par.DepIdx, par.ArrIdx, seatBit, par.IsStudent)
+	car, seat, isMedley, ok := bookSeat(scheduleTran, carIdxList, &par)
 	// 无票
 	if !ok {
 		return errors.New("没有足够的票")
 	}
-	newTicket := buildTicket(tran, car, seat, par.PassengerIDs[0], par.Date, par.DepIdx, par.ArrIdx, depTime, arrTime, isMedley, par.IsStudent)
+	newTicket := buildTicket(tran, car, &par, seat.SeatNum, par.PassengerIDs[0], isMedley)
 	newTicket.ID = getTicketID(par.PassengerIDs[0])
 	newTicket.ChangeTicketID = oldTicket.ID
 	newOrder := &Order{
@@ -302,7 +312,7 @@ func (o *Order) Payment(payType uint, payAccount string, price float32) error {
 
 // RefundOrder 退票（已支付订单）
 func RefundOrder(orderID uint64) error {
-	o := &Order{ID:orderID}
+	o := &Order{ID: orderID}
 	db.First(o)
 	if err := CancelOrder(orderID); err != nil {
 		return err
@@ -356,24 +366,24 @@ func hasTimeConflictInChange(passengerID, ticketID uint64, depTime, arrTime time
 }
 
 // buildTicket 组装订单信息
-func buildTicket(tran *TranInfo, car *ScheduleCar, seat *ScheduleSeat, passengerID uint64, date string, depIdx, arrIdx uint8, depTime, arrTime time.Time, isMedley, isStudent bool) *Ticket {
+func buildTicket(tran *TranInfo, car *ScheduleCar, par *SubmitOrderModel, seatNum string, passengerID uint64, isMedley bool) *Ticket {
 	t := &Ticket{
 		PassengerID:     passengerID,
-		IsStudent:       isStudent,
+		IsStudent:       par.IsStudent,
 		Status:          constTicketUnpay,
-		Price:           tran.getOrderPrice(car.SeatType, seat.SeatNum, depIdx, arrIdx),
-		TranDepDate:     date,
+		Price:           tran.getOrderPrice(car.SeatType, seatNum, par.DepIdx, par.ArrIdx),
+		TranDepDate:     par.Date,
 		TranNum:         tran.TranNum,
 		CarNum:          car.CarNum,
 		SeatType:        car.SeatType,
-		SeatNum:         seat.SeatNum,
-		CheckTicketGate: tran.Timetable[depIdx].CheckTicketGate,
-		DepStation:      tran.Timetable[depIdx].StationName,
-		DepStationIdx:   depIdx,
-		DepTime:         depTime,
-		ArrStation:      tran.Timetable[arrIdx].StationName,
-		ArrStationIdx:   arrIdx,
-		ArrTime:         arrTime,
+		SeatNum:         seatNum,
+		CheckTicketGate: tran.Timetable[par.DepIdx].CheckTicketGate,
+		DepStation:      tran.Timetable[par.DepIdx].StationName,
+		DepStationIdx:   par.DepIdx,
+		DepTime:         par.depTime,
+		ArrStation:      tran.Timetable[par.ArrIdx].StationName,
+		ArrStationIdx:   par.ArrIdx,
+		ArrTime:         par.arrTime,
 	}
 	if isMedley {
 		t.SeatType = constSeatTypeNoSeat
