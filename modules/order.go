@@ -53,16 +53,15 @@ func isCancelTimesInLimit(userID uint64) bool {
 
 // Order 订单
 type Order struct {
-	ID            uint64
-	OrderNum      string    // 订单号
-	UserID        uint64    // 用户ID
-	Price         float32   // 价格
-	BookTime      time.Time `gorm:"type:datetime"` // 订票时间
-	PayTime       time.Time `gorm:"type:datetime"` // 支付时间
-	PayType       uint      // 支付类型
-	PayAccount    string    // 支付账户
-	Status        uint8     // 订单状态 0.未支付 1.已取消 2.订单超时 3.已支付 4.已退票 5.已改签
-	ChangeOrderID uint64    // 改签票订单ID
+	ID         uint64
+	OrderNum   string    // 订单号
+	UserID     uint64    // 用户ID
+	Price      float32   // 价格
+	BookTime   time.Time `gorm:"type:datetime"` // 订票时间
+	PayTime    time.Time `gorm:"type:datetime"` // 支付时间
+	PayType    uint8     // 支付类型 1.支付宝 2.微信
+	PayAccount string    // 支付账户
+	Status     uint8     // 订单状态 0.未支付 1.已取消 2.订单超时 3.已支付 4.已退票
 }
 
 // GetOrderInfo 获取订单信息
@@ -241,7 +240,6 @@ func ChangeOrder(par SubmitOrderModel, oldTicketID uint64) error {
 	}
 	oldOrder := &Order{ID: oldTicket.OrderID}
 	db.First(oldOrder)
-	oldOrder.ChangeOrderID = newOrder.ID
 	// 原票价高于改签后的票价则需设置改签票为已支付状态，且需退还差额；否则改签票保持未支付状态，且用户需补交差额
 	if oldOrder.Price >= newOrder.Price {
 		// 退款
@@ -286,7 +284,7 @@ func CancelOrder(orderID uint64) error {
 }
 
 // Payment 订单支付
-func (o *Order) Payment(payType uint, payAccount string, price float32) error {
+func (o *Order) Payment(payType uint8, payAccount string, price float32) error {
 	if o.Status != constOrderUnpay {
 		switch o.Status {
 		case constOrderPaid:
