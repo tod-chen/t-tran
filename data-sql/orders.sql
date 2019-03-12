@@ -16,32 +16,18 @@ MySQL - 8.0.13 : Database - t-tran
 DROP TABLE IF EXISTS `orders`;
 
 CREATE TABLE `orders` (
-  `order_num` varchar(255) DEFAULT NULL,
-  `user_id` int(11) DEFAULT NULL,
-  `contact_id` int(11) DEFAULT NULL,
-  `tran_dep_date` varchar(255) DEFAULT NULL,
-  `tran_num` varchar(255) DEFAULT NULL,
-  `car_num` tinyint(3) unsigned DEFAULT NULL,
-  `seat_num` varchar(255) DEFAULT NULL,
-  `seat_type` varchar(255) DEFAULT NULL,
-  `departure_station` varchar(255) DEFAULT NULL,
-  `check_ticket_gate` varchar(255) DEFAULT NULL,
-  `departure_time` datetime DEFAULT NULL,
-  `arrival_station` varchar(255) DEFAULT NULL,
-  `arrival_time` datetime DEFAULT NULL,
-  `price` double DEFAULT NULL,
-  `book_time` datetime DEFAULT NULL,
-  `pay_time` datetime DEFAULT NULL,
-  `pay_type` int(11) DEFAULT NULL,
-  `pay_account` varchar(255) DEFAULT NULL,
-  `status` tinyint(4) DEFAULT NULL,
-  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
-  `create_at` datetime DEFAULT NULL,
-  `update_at` datetime DEFAULT NULL,
-  PRIMARY KEY (`id`)
+  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  `order_num` varchar(255) CHARACTER SET utf8 COLLATE utf8_general_ci NOT NULL,
+  `user_id` bigint(20) unsigned NOT NULL,
+  `price` double NOT NULL,
+  `book_time` datetime NOT NULL,
+  `pay_time` datetime NOT NULL,
+  `pay_type` tinyint(4) NOT NULL COMMENT '支付类型 1.支付宝 2.微信',
+  `pay_account` varchar(255) CHARACTER SET utf8 COLLATE utf8_general_ci NOT NULL,
+  `status` tinyint(4) NOT NULL COMMENT '订单状态 0.未支付 1.已取消 2.订单超时 3.已支付 4.已退票',
+  PRIMARY KEY (`id`),
+  KEY `q` (`user_id`,`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
-
-/*Data for the table `orders` */
 
 /*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
 /*!40014 SET UNIQUE_CHECKS=@OLD_UNIQUE_CHECKS */;
