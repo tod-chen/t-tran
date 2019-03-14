@@ -186,7 +186,7 @@ type TranInfo struct {
 	EnableEndDate time.Time              `gorm:"index:query;type:datetime;default:'9999-12-31 23:59:59'" json:"enableEndDate"`
 	CarIds        string                 `gorm:"type:varchar(100)" json:"carIds"` // 车厢ID及其数量，格式如：32:1;12:2; ...
 	Timetable     []Route                `gorm:"-" json:"timetable"`              // 时刻表
-	SeatPriceMap  map[string]([]float32) `gorm:"-" json:"seatPriceMap"`           // 各类席位在各路段的价格
+	SeatPriceMap  map[string]([]int) `gorm:"-" json:"seatPriceMap"`           // 各类席位在各路段的价格
 }
 
 // 是否为城际车次，城际车次在同一个城市内可能会有多个站，情况相对特殊
@@ -199,14 +199,14 @@ func (t *TranInfo) getFullInfo() {
 	db.Where("tran_id = ?", t.ID).Order("station_index").Find(&t.Timetable)
 
 	// 获取各席别在各路段的价格，大多数车次只有三类席别（无座不考虑）
-	t.SeatPriceMap = make(map[string]([]float32), 3)
+	t.SeatPriceMap = make(map[string]([]int), 3)
 	var routePrices []RoutePrice
 	db.Where("tran_id = ?", t.ID).Order("seat_type, route_index").Find(&routePrices)
 	count := len(routePrices)
 	for start, end := 0, 1; end < count; end++ {
 		if end == count-1 || routePrices[start].SeatType != routePrices[end].SeatType {
 			arr := routePrices[start : end+1]
-			prices := make([]float32, len(arr))
+			prices := make([]int, len(arr))
 			for idx, rp := range arr {
 				prices[idx] = rp.Price
 			}
@@ -303,11 +303,11 @@ func (t *TranInfo) initTimetable() {
 func (t *TranInfo) getSeatPrice(depIdx, arrIdx uint8) (result map[string]float32) {
 	result = make(map[string]float32)
 	for seatType, eachRoutePrice := range t.SeatPriceMap {
-		var price float32
+		var price int
 		for i := depIdx; i < arrIdx; i++ {
 			price += eachRoutePrice[i]
 		}
-		result[seatType] = price
+		result[seatType] = float32(price) / 100
 	}
 	return
 }
@@ -377,22 +377,23 @@ func (t *TranInfo) IsMatchQuery(depS, arrS *Station, queryDate time.Time) (depId
 }
 
 // getOrderPrice 获取订单价格
-func (t *TranInfo) getOrderPrice(seatType, seatNum string, depIdx, arrIdx uint8) (price float32) {
-	var priceSlice []float32
+func (t *TranInfo) getOrderPrice(seatType, seatNum string, depIdx, arrIdx uint8) float32 {
+	var priceSlice []int
 	switch seatType {
 	case constSeatTypeAdvancedSoftSleeper, constSeatTypeSoftSleeper, constSeatTypeHardSleeper:
 		priceSlice = t.SeatPriceMap[seatType+strings.Split(seatNum, "-")[1]][depIdx : arrIdx-depIdx]
 	default:
 		priceSlice = t.SeatPriceMap[seatType][depIdx : arrIdx-depIdx]
 	}
+	price := 0
 	for _, p := range priceSlice {
 		price += p
 	}
-	return
+	return float32(price) / 100
 }
 
 // getDepAndArrTime 获取出发和到站时间
-func (t *TranInfo)getDepAndArrTime(date string, depIdx, arrIdx uint8)(time.Time, time.Time){
+func (t *TranInfo) getDepAndArrTime(date string, depIdx, arrIdx uint8) (time.Time, time.Time) {
 	depTime, arrTime := t.Timetable[depIdx].DepTime, t.Timetable[arrIdx].ArrTime
 	dt, _ := time.Parse(ConstYmdFormat, date)
 	y, m, d := dt.Date()
@@ -434,10 +435,10 @@ func (r *Route) getStrStayTime() string {
 // RoutePrice 各路段价格
 type RoutePrice struct {
 	ID         uint64
-	TranID     int     `gorm:"index:main"`      // 车次ID
-	SeatType   string  `gorm:"type:varchar(5)"` // 座次类型
-	RouteIndex uint8   // 路段索引
-	Price      float32 // 价格
+	TranID     int    `gorm:"index:main"`      // 车次ID
+	SeatType   string `gorm:"type:varchar(5)"` // 座次类型
+	RouteIndex uint8  // 路段索引
+	Price      int    // 价格, 单位：分
 }
 
 // Car 车厢信息结构体
