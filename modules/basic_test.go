@@ -7,7 +7,6 @@ import (
 )
 
 func TestStructTranInfo(t *testing.T) {
-	initTranInfo()
 	if len(tranInfos) == 10425 {
 		t.Log("trans info pass")
 	} else {

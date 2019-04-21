@@ -134,8 +134,8 @@ func SubmitOrder(par SubmitOrderModel) error {
 		return err
 	}
 	// 排班信息
-	scheduleTran := getScheduleTran(par.TranNum, par.Date)
-	carIdxList, exist := scheduleTran.carTypeIdxMap[par.SeatType]
+	scheduleTran := scheduleCache.getScheduleTran(par.TranNum, par.Date)
+	carIdxList, exist := tran.carTypeIdxMap[par.SeatType]
 	if !exist {
 		return errors.New("所选席别无效")
 	}
@@ -216,9 +216,9 @@ func ChangeOrder(par SubmitOrderModel, oldTicketID uint64) error {
 	if hasTimeConflictInChange(par.PassengerIDs[0], oldTicketID, par.depTime, par.arrTime) {
 		return errors.New("乘车人时间冲突")
 	}
-	scheduleTran := getScheduleTran(par.TranNum, par.Date)
+	scheduleTran := scheduleCache.getScheduleTran(par.TranNum, par.Date)
 	// 锁定座位，创建订单
-	carIdxList, exist := scheduleTran.carTypeIdxMap[par.SeatType]
+	carIdxList, exist := tran.carTypeIdxMap[par.SeatType]
 	if !exist {
 		return errors.New("所选席别无效")
 	}
@@ -259,7 +259,7 @@ func CancelOrder(orderID uint64) error {
 	db.First(o)
 	var tickets []Ticket
 	db.Where("order_id = ?", o.ID).Find(&tickets)
-	st := getScheduleTran(tickets[0].TranNum, tickets[0].TranDepDate)
+	st := scheduleCache.getScheduleTran(tickets[0].TranNum, tickets[0].TranDepDate)
 	seatBit := countSeatBit(tickets[0].DepStationIdx, tickets[0].ArrStationIdx)
 	for ti := 0; ti < len(tickets); ti++ {
 		for ci := 0; ci < len(st.Cars); ci++ {

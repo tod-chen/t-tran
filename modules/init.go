@@ -33,15 +33,20 @@ func getMgoSession() *mgo.Session {
 
 func init() {
 	fmt.Println("init modules beginning")
-	defer fmt.Println("init modules end")
+	defer func() {
+		fmt.Println("init modules end")
+		if p := recover(); p != nil {
+			fmt.Printf("panic: %s\n", p)
+		}
+	}()
 	var err error
 	db, err = gorm.Open("mysql", "root:@/t-tran?charset=utf8&parseTime=True&loc=Asia%2FShanghai")
 	if err != nil {
 		panic(err)
 	}
-
 	initStation()
 	initTranInfo()
 	initSchedule()
+	// 需要初始化用户数据，则取消下面一行代码的注释
 	// initUserInfos()
 }

@@ -65,14 +65,14 @@ func queryResidualTicket(c *gin.Context) {
 // 查询时刻表
 func queryTimetable(c *gin.Context) {
 	tranNum, date := c.Query("tranNum"), c.Query("date")
-	t, _ := time.Parse(modules.ConstYmdFormat, date)
+	t, _ := time.ParseInLocation(modules.ConstYmdFormat, date, localLoc)
 	c.JSON(http.StatusOK, gin.H{"timetable": modules.QueryTimetable(tranNum, t)})
 }
 
 // 查询票价
 func queryPrice(c *gin.Context) {
 	tranNum, date := c.Query("tranNum"), c.Query("date")
-	t, _ := time.Parse(modules.ConstYmdFormat, date)
+	t, _ := time.ParseInLocation(modules.ConstYmdFormat, date, localLoc)
 	dep, arr := c.Query("depIdx"), c.Query("arrIdx")
 	depI, _ := strconv.Atoi(dep)
 	arrI, _ := strconv.Atoi(arr)
@@ -91,7 +91,7 @@ func submitOrder(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"success": false, "msg": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"success":true})
+	c.JSON(http.StatusOK, gin.H{"success": true})
 }
 
 // 改签
@@ -108,10 +108,10 @@ func changeOrder(c *gin.Context) {
 		return
 	}
 	if err = modules.ChangeOrder(model, oldTicketID); err != nil {
-		c.JSON(http.StatusOK, gin.H{"success":false, "msg":err.Error()})
+		c.JSON(http.StatusOK, gin.H{"success": false, "msg": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"success":true})
+	c.JSON(http.StatusOK, gin.H{"success": true})
 }
 
 // 查询订单
@@ -124,14 +124,14 @@ func cancelOrder(c *gin.Context) {
 	orderID := c.PostForm("orderID")
 	oID, err := strconv.ParseUint(orderID, 10, 64)
 	if err != nil {
-		c.JSON(http.StatusOK, gin.H{"success":false, "msg":"订单无效"})
+		c.JSON(http.StatusOK, gin.H{"success": false, "msg": "订单无效"})
 		return
 	}
 	if err = modules.CancelOrder(oID); err != nil {
-		c.JSON(http.StatusOK, gin.H{"success":false, "msg":err.Error()})
+		c.JSON(http.StatusOK, gin.H{"success": false, "msg": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"success":true})
+	c.JSON(http.StatusOK, gin.H{"success": true})
 }
 
 // 退票
@@ -139,14 +139,14 @@ func refundOrder(c *gin.Context) {
 	orderID := c.PostForm("orderID")
 	oID, err := strconv.ParseUint(orderID, 10, 64)
 	if err != nil {
-		c.JSON(http.StatusOK, gin.H{"success":false, "msg":"订单无效"})
+		c.JSON(http.StatusOK, gin.H{"success": false, "msg": "订单无效"})
 		return
 	}
 	if err = modules.RefundOrder(oID); err != nil {
-		c.JSON(http.StatusOK, gin.H{"success":false, "msg":err.Error()})
+		c.JSON(http.StatusOK, gin.H{"success": false, "msg": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"success":true})
+	c.JSON(http.StatusOK, gin.H{"success": true})
 }
 
 // 取票
@@ -154,9 +154,9 @@ func printTicket(c *gin.Context) {
 	ticketID := c.PostForm("ticketID")
 	tID, err := strconv.ParseUint(ticketID, 10, 64)
 	if err != nil {
-		c.JSON(http.StatusOK, gin.H{"success":false, "msg":"订单无效"})
+		c.JSON(http.StatusOK, gin.H{"success": false, "msg": "订单无效"})
 		return
 	}
 	modules.CheckIn(tID)
-	c.JSON(http.StatusOK, gin.H{"success":true})
+	c.JSON(http.StatusOK, gin.H{"success": true})
 }

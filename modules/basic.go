@@ -84,10 +84,9 @@ func initCarMap() {
 
 func initTranInfos() {
 	start := time.Now()
-	goPool := newGoPool(100)
-	now, lastDay := time.Now(), time.Now().AddDate(0, 0, constDays)
-	today, lastDate := now.Format(ConstYmdFormat), lastDay.Format(ConstYmdFormat)
-	db.Where("enable_end_date >= ? and ? >= enable_start_date and tran_num like ?", today, lastDate, "Z2%").Order("tran_num, enable_start_date").Find(&tranInfos)
+	today, lastDate := time.Now().Format(ConstYmdFormat), time.Now().AddDate(0, 0, constDays).Format(ConstYmdFormat)
+	db.Where("enable_end_date >= ? and ? >= enable_start_date", today, lastDate).Find(&tranInfos)
+	goPool := newGoPool(120) // mysql 默认的最大连接数为151
 	var wg sync.WaitGroup
 	for i := 0; i < len(tranInfos); i++ {
 		goPool.Take()
@@ -100,9 +99,7 @@ func initTranInfos() {
 	}
 	wg.Wait()
 	goPool.Close()
-	if !sort.IsSorted(tranInfos) {
-		sort.Sort(tranInfos)
-	}
+	sort.Sort(tranInfos)
 	fmt.Println("init tran infos complete, cost time:", time.Now().Sub(start).Seconds(), "(s)")
 }
 
@@ -137,7 +134,7 @@ func getTranInfo(tranNum string, date time.Time) (*TranInfo, bool) {
 		return nil, false
 	}
 	// 该车次在所选日期不发车
-	if int(date.Sub(tranInfos[idx].EnableStartDate).Hours())/(tranInfos[idx].ScheduleDays*24) != 0 {
+	if int(date.Sub(tranInfos[idx].EnableStartDate).Hours())%(tranInfos[idx].ScheduleDays*24) != 0 {
 		return nil, false
 	}
 	return &tranInfos[idx], true
@@ -181,12 +178,14 @@ type TranInfo struct {
 	SaleTicketTime    time.Time `json:"saleTicketTime"`                             // 售票时间，不需要日期部分，只取时间部分
 	NonSaleRemark     string    `gorm:"type:varchar(100)" json:"nonSaleRemark"`     // 不售票说明
 	// 生效开始日期 默认零值
-	EnableStartDate time.Time `gorm:"index:query;type:datetime;default:'0000-00-00 00:00:00'" json:"enableStartDate"`
+	EnableStartDate time.Time `gorm:"index:query;type:datetime;default:'1970-01-01 00:00:00'" json:"enableStartDate"`
 	// 生效截止日期 默认最大值
-	EnableEndDate time.Time              `gorm:"index:query;type:datetime;default:'9999-12-31 23:59:59'" json:"enableEndDate"`
-	CarIds        string                 `gorm:"type:varchar(100)" json:"carIds"` // 车厢ID及其数量，格式如：32:1;12:2; ...
-	Timetable     []Route                `gorm:"-" json:"timetable"`              // 时刻表
-	SeatPriceMap  map[string]([]int) `gorm:"-" json:"seatPriceMap"`           // 各类席位在各路段的价格
+	EnableEndDate time.Time            `gorm:"index:query;type:datetime;default:'9999-12-31 23:59:59'" json:"enableEndDate"`
+	CarIds        string               `gorm:"type:varchar(100)" json:"carIds"` // 车厢ID及其数量，格式如：32:1;12:2; ...
+	carCount      uint8                // 车厢数量
+	carTypeIdxMap map[string]([]uint8) // 各座次类型及其对应的车厢索引集合
+	Timetable     []Route              `gorm:"-" json:"timetable"`    // 时刻表
+	SeatPriceMap  map[string]([]int)   `gorm:"-" json:"seatPriceMap"` // 各类席位在各路段的价格
 }
 
 // 是否为城际车次，城际车次在同一个城市内可能会有多个站，情况相对特殊
@@ -197,15 +196,14 @@ func (t *TranInfo) isIntercity() bool {
 func (t *TranInfo) getFullInfo() {
 	// 获取时刻表信息
 	db.Where("tran_id = ?", t.ID).Order("station_index").Find(&t.Timetable)
-
 	// 获取各席别在各路段的价格，大多数车次只有三类席别（无座不考虑）
 	t.SeatPriceMap = make(map[string]([]int), 3)
 	var routePrices []RoutePrice
 	db.Where("tran_id = ?", t.ID).Order("seat_type, route_index").Find(&routePrices)
-	count := len(routePrices)
+	count := len(routePrices) + 1
 	for start, end := 0, 1; end < count; end++ {
 		if end == count-1 || routePrices[start].SeatType != routePrices[end].SeatType {
-			arr := routePrices[start : end+1]
+			arr := routePrices[start:end]
 			prices := make([]int, len(arr))
 			for idx, rp := range arr {
 				prices[idx] = rp.Price
@@ -214,38 +212,57 @@ func (t *TranInfo) getFullInfo() {
 			start = end
 		}
 	}
-}
-
-func (t *TranInfo) getScheduleCars() (sCars *[]ScheduleCar) {
-	// 获取车厢信息
-	carSettings, carCount := strings.Split(t.CarIds, ";"), 0
-	carIds, carIDCountMap := make([]int, len(carSettings)), make(map[int]int, len(carSettings))
+	// 设置车厢信息
+	t.carTypeIdxMap = make(map[string]([]uint8))
+	// 车厢ID及其数量，格式如：32:1;12:2; ...
+	carSettings, carIdx := strings.Split(t.CarIds, ";"), uint8(0)
 	for i := 0; i < len(carSettings); i++ {
 		setting := strings.Split(carSettings[i], ":")
 		if len(setting) == 2 {
 			id, _ := strconv.Atoi(setting[0])
-			carIds[i] = id
 			count, _ := strconv.Atoi(setting[1])
-			carIDCountMap[id] = count
-			carCount += count
-		}
-	}
-	routeCount := len(t.Timetable) - 1
-	result, carIdx := make([]ScheduleCar, carCount), uint8(0)
-	for id, count := range carIDCountMap {
-		sc := scheduleCarMap[id]
-		for i := 0; i < count; i++ {
-			result[carIdx] = ScheduleCar{
-				SeatType:    sc.SeatType,
-				CarNum:      carIdx + 1,
-				NoSeatCount: sc.NoSeatCount,
-				Seats:       sc.Seats,
-				EachRouteTravelerCount: make([]uint8, routeCount, routeCount), //sc.EachRouteTravelerCount,
+			car := carMap[id]
+			idxs := make([]uint8, count)
+			for k := 0; k < count; k++ {
+				idxs[k] = carIdx
+				carIdx++
 			}
-			carIdx++
+			// 当t.CarIds中某ID配置了多次，应该以追加的形式得到索引结果集，否则就会得到覆盖的错误结果
+			// 如："16:2;18:5;16:1"，则ID为16的车厢，应为seatTypeOf_16:[0,1,7]，而不是seatTypeOf_16:[7]
+			if existIdxs, ok := t.carTypeIdxMap[car.SeatType]; ok {
+				idxs = append(existIdxs, idxs...)
+			}
+			t.carTypeIdxMap[car.SeatType] = idxs
 		}
 	}
-	return &result
+	t.carCount = carIdx
+}
+
+// 要严格与getFullInfo中设置车厢信息部分的逻辑一致
+func (t *TranInfo) getScheduleCars() []ScheduleCar {
+	// 获取排班的车厢信息
+	result := make([]ScheduleCar, t.carCount)
+	carIdx, routeCount := uint8(0), len(t.Timetable)-1
+	carSettings := strings.Split(t.CarIds, ";")
+	for i := 0; i < len(carSettings); i++ {
+		setting := strings.Split(carSettings[i], ":")
+		if len(setting) == 2 {
+			id, _ := strconv.Atoi(setting[0])
+			count, _ := strconv.Atoi(setting[1])
+			sc := scheduleCarMap[id]
+			for k := 0; k < count; k++ {
+				result[carIdx] = ScheduleCar{
+					SeatType:    sc.SeatType,
+					CarNum:      carIdx + 1,
+					NoSeatCount: sc.NoSeatCount,
+					Seats:       sc.Seats,
+					EachRouteTravelerCount: make([]uint8, routeCount), //sc.EachRouteTravelerCount,
+				}
+				carIdx++
+			}
+		}
+	}
+	return result
 }
 
 // Save 保存到数据库
@@ -303,7 +320,11 @@ func (t *TranInfo) initTimetable() {
 func (t *TranInfo) getSeatPrice(depIdx, arrIdx uint8) (result map[string]float32) {
 	result = make(map[string]float32)
 	for seatType, eachRoutePrice := range t.SeatPriceMap {
-		var price int
+		length := uint8(len(eachRoutePrice))
+		if arrIdx > length-1 {
+			arrIdx = length - 1
+		}
+		price := 0
 		for i := depIdx; i < arrIdx; i++ {
 			price += eachRoutePrice[i]
 		}

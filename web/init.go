@@ -7,7 +7,10 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+var localLoc *time.Location
+
 func init() {
+	localLoc, _ = time.LoadLocation("Local")
 	gin.SetMode(gin.ReleaseMode)
 	// web engine
 	g := gin.Default()
@@ -15,7 +18,7 @@ func init() {
 	g.LoadHTMLGlob("templates/*")
 	// load resource files, js/css etc.
 	g.Static("/content", "content")
-	// set admin router	
+	// set admin router
 	setAdminRouter(g.Group("/admin"))
 	// set user router
 	setUserRouter(g.Group("/"))

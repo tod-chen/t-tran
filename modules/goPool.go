@@ -2,15 +2,15 @@ package modules
 
 type goRoutinePool struct {
 	active bool
-	ch     chan byte
+	ch     chan struct{}
 }
 
 func newGoPool(cap int) *goRoutinePool {
 	goPool := &goRoutinePool{
-		ch: make(chan byte, cap),
+		ch: make(chan struct{}, cap),
 	}
 	for i := 0; i < cap; i++ {
-		goPool.ch <- 1
+		goPool.ch <- struct{}{}
 	}
 	goPool.active = true
 	return goPool
@@ -23,7 +23,7 @@ func (p *goRoutinePool) Take() {
 
 // Return 还
 func (p *goRoutinePool) Return() {
-	p.ch <- 1
+	p.ch <- struct{}{}
 }
 
 // Close 关

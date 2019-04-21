@@ -17,9 +17,7 @@ func QueryResidualTicketInfo(depStationName, arrStationName, depDate string, isS
 		}
 		count++
 		go func(t *TranInfo, depIdx, arrIdx uint8, date string) {
-			rti := newResidualTicketInfo(t, depIdx, arrIdx, date)
-			tran := getScheduleTran(t.TranNum, date)
-			rti.setScheduleInfo(tran, isStudent)
+			rti := buildResidualTicketInfo(t, depIdx, arrIdx, date, isStudent)
 			resultCh <- rti
 		}(matchTrans[i], depIdx, arrIdx, tdate)
 	}
@@ -65,7 +63,7 @@ func QueryTimetable(tranNum string, date time.Time) (result []TimetableResult) {
 func QuerySeatPrice(tranNum string, date time.Time, depIdx, arrIdx uint8) (result map[string]float32) {
 	if tran, exist := getTranInfo(tranNum, date); exist {
 		result = tran.getSeatPrice(depIdx, arrIdx)
-	}	
+	}
 	return
 }
 

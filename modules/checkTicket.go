@@ -18,7 +18,7 @@ func checkTicket() {
 
 // checkTranTicket 校验具体某趟车次的订单
 func checkTranTicket(tranNum, date string) {
-	st := getScheduleTran(tranNum, date)
+	st := scheduleCache.getScheduleTran(tranNum, date)
 	copySt := *st
 	for ci := 0; ci < len(copySt.Cars); ci++ {
 		if copySt.Cars[ci].NoSeatCount != 0 {
