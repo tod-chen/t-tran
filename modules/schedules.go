@@ -63,13 +63,17 @@ func (s *scheduleTranCache) init(length, eleCap int) {
 			trans := s.cache[now.Second()%s.mod]
 			session := getMgoSession()
 			coll := session.DB(constMgoDB).C("tranSchedule")
-			if len(trans) != 0 {
-				fmt.Println("tranNum:", trans[0].TranNum, ", departureDate:", trans[0].DepartureDate, ", now:", now.Format(ConstYMdHmsFormat))
-			}
 			for i := 0; i < len(trans); i++ {
-				trans[i].LastUpdateTime = now
-				coll.Update(bson.M{"tranNum": trans[i].TranNum, "departureDate": trans[i].DepartureDate}, &trans[i])
+				if trans[i].hasChanged {
+					trans[i].LastUpdateTime = now
+					coll.Update(bson.M{"tranNum": trans[i].TranNum, "departureDate": trans[i].DepartureDate}, &trans[i])
+				} else if trans[i].LastUpdateTime.Sub(time.Now()) > 10*time.Minute {
+					// 10分钟内无变更，缓存移除
+					scheduleTranMap.Delete(trans[i].TranNum + "_" + trans[i].DepartureDate)
+					trans = append(trans[:i], trans[i+1:]...)
+				}
 			}
+			s.cache[now.Second()%s.mod] = trans
 			session.Close()
 		}
 	})
@@ -123,7 +127,7 @@ func initScheduleCar() {
 // 初始化列车排班
 func initScheduleTran() {
 	start := time.Now()
-	goPoolCompute := newGoPool(350)
+	goPoolCompute := newGoPool(300)
 	y, m, d := time.Now().Date()
 	today := time.Date(y, m, d, 0, 0, 0, 0, time.Local)
 	var wg sync.WaitGroup
@@ -262,6 +266,7 @@ type ScheduleTran struct {
 	SaleTicketTime time.Time     `bson:"saleTicketTime"` // 售票时间
 	Cars           []ScheduleCar `bson:"cars"`           // 车厢
 	FullSeatBit    int64         `bson:"fullSeatBit"`    // 全程满座的位标记值，某座位的位标记与此值相等时，表示该座位全程满座了
+	hasChanged     bool          // 缓存是否有变更
 	LastUpdateTime time.Time     `bson:"lastUpdateTime"` // 最后更新时间
 }
 
@@ -326,14 +331,14 @@ func (c *ScheduleCar) getNoSeatCount(depIdx, arrIdx uint8) uint8 {
 }
 
 // getAvailableSeat 获取可预订的座位,是否获取成功标记,是否为拼凑的站票标记
-func (c *ScheduleCar) getAvailableSeat(par *SubmitOrderModel) (s *ScheduleSeat, ok bool) {
+func (c *ScheduleCar) getAvailableSeat(par *SubmitOrderModel) (s *ScheduleSeat, seatIdx uint8, ok bool) {
 	for i := 0; i < len(c.Seats); i++ {
 		if c.Seats[i].Book(par.seatBit, par.IsStudent) {
 			c.occupySeat(par.DepIdx, par.ArrIdx)
-			return &c.Seats[i], true
+			return &c.Seats[i], uint8(i), true
 		}
 	}
-	return nil, false
+	return nil, 0, false
 }
 
 func (c *ScheduleCar) getAvailableNoSeat(par *SubmitOrderModel) (s *ScheduleSeat, ok bool) {

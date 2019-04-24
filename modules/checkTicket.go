@@ -2,9 +2,6 @@ package modules
 
 import "time"
 
-// 已支付的全部有效订单
-var allOrders []Order
-
 // checkTicket 校验订单，以便释放无效订单所占用的资源 或 暴露冲突的订单
 func checkTicket() {
 	date := time.Now()

@@ -7,6 +7,9 @@ import (
 // QueryResidualTicketInfo 获取所选出发日期中， 经过出发站、目的站的车次及其各类余票数量
 func QueryResidualTicketInfo(depStationName, arrStationName, depDate string, isStudent bool) (result []string) {
 	depS, arrS := getStationInfoByName(depStationName), getStationInfoByName(arrStationName)
+	if depS == nil || arrS == nil {
+		return
+	}
 	matchTrans := getViaTrans(depS, arrS)
 	queryDate, _ := time.Parse(ConstYmdFormat, depDate)
 	resultCh, count := make(chan *ResidualTicketInfo, len(matchTrans)), 0
