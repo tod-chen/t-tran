@@ -201,7 +201,7 @@ type ResidualTicketInfo struct {
 	date      string    // 发车日期
 	depIdx    uint8     // 出发站索引，值为0时表示出发站为起点站，否则表示路过
 	depCode   string    // 出发站编码
-	depTime   time.Time // 出发时间, 满足条件的列车需根据出发时间排序
+	depTime   string // 出发时间, 满足条件的列车需根据出发时间排序
 	arrIdx    uint8     // 目的站索引，值与routeCount相等时表示目的站为终点，否则表示路过
 	arrCode   string    // 目的站编码
 	arrTime   string    // 到达时间
@@ -216,7 +216,7 @@ func buildResidualTicketInfo(t *TranInfo, depIdx, arrIdx uint8, date string, isS
 		date:     date,
 		depIdx:   depIdx,
 		depCode:  t.Timetable[depIdx].StationCode,
-		depTime:  t.Timetable[depIdx].DepTime,
+		depTime:  t.Timetable[depIdx].DepTime.Format(ConstHmFormat),
 		arrIdx:   arrIdx,
 		arrCode:  t.Timetable[arrIdx].StationCode,
 		arrTime:  t.Timetable[arrIdx].ArrTime.Format(ConstHmFormat),
@@ -237,8 +237,7 @@ func buildResidualTicketInfo(t *TranInfo, depIdx, arrIdx uint8, date string, isS
 
 // 结果转为字符串
 func (r *ResidualTicketInfo) toString() string {
-	list := []string{r.tranNum, r.date,
-		strconv.Itoa(int(r.depIdx)), r.depCode, r.depTime.Format(ConstHmFormat),
+	list := []string{r.tranNum, r.date, strconv.Itoa(int(r.depIdx)), r.depCode, r.depTime,
 		strconv.Itoa(int(r.arrIdx)), r.arrCode, r.arrTime, r.costTime}
 	countList := make([]string, 12)
 	count := 0
@@ -279,7 +278,7 @@ func (st *ScheduleTran) Save() (bool, string) {
 
 // GetAvaliableSeatCount 获取各席别余票数
 func (st *ScheduleTran) GetAvaliableSeatCount(t *TranInfo, depIdx, arrIdx uint8, isStudent bool) []int {
-	// 总共11类座次
+	// 总共11类席别
 	result := []int{-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}
 	// 路段位标记
 	seatBit, noSeatCount := countSeatBit(depIdx, arrIdx), 0

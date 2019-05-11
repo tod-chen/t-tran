@@ -26,6 +26,7 @@ CREATE TABLE `tickets` (
   `tran_dep_date` varchar(10) CHARACTER SET utf8 COLLATE utf8_general_ci NOT NULL,
   `tran_num` varchar(10) CHARACTER SET utf8 COLLATE utf8_general_ci NOT NULL,
   `car_num` tinyint(4) unsigned NOT NULL,
+  `seat_idx` tinyint(4) unsigned NOT NULL,
   `seat_num` varchar(10) CHARACTER SET utf8 COLLATE utf8_general_ci NOT NULL,
   `seat_type` varchar(10) CHARACTER SET utf8 COLLATE utf8_general_ci NOT NULL,
   `check_ticket_gate` varchar(10) CHARACTER SET utf8 COLLATE utf8_general_ci NOT NULL,
